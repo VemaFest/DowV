@@ -13,6 +13,13 @@ import subprocess
 from plyer import notification
 import logging
 import winreg
+import customtkinter as ctk
+
+ctk.set_appearance_mode("system")
+ctk.set_default_color_theme("dark-blue")
+
+# NOTA PARA EL LOGO: Cuando tengas el .ico, guárdalo en la carpeta del proyecto y usa esta variable:
+# ICON_PATH = "logo.ico"
 
 LOG_FILE = "dowv_auditoria.log"
 logging.basicConfig(
@@ -178,14 +185,14 @@ def actualizar_carpeta_ui(*args):
         guardar_config(tipo, nueva_ruta)
         
     carpeta_destino.set(nueva_ruta)
-    etiqueta_carpeta.config(text=f"Carpeta: {nueva_ruta}")
+    etiqueta_carpeta.configure(text=f"Carpeta: {nueva_ruta}")
 
 def seleccionar_carpeta():
     carpeta = filedialog.askdirectory()
     if carpeta:
         tipo = opcion_var.get()
         carpeta_destino.set(carpeta)
-        etiqueta_carpeta.config(text=f"Carpeta: {carpeta}")
+        etiqueta_carpeta.configure(text=f"Carpeta: {carpeta}")
         guardar_config(tipo, carpeta)
 
 def obtener_urls():
@@ -199,7 +206,7 @@ def buscar_calidades_hilo():
     
     url = urls[0]
     
-    etiqueta_estado.config(text="Buscando calidades automáticamente...", fg="blue")
+    etiqueta_estado.configure(text="Buscando calidades automáticamente...", fg="blue")
     
     ydl_opts = {
         'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
@@ -250,9 +257,9 @@ def buscar_calidades_hilo():
         formatos_disponibles['audio'].sort(key=lambda x: x['abr'], reverse=True)
         
         ventana.after(0, actualizar_combobox)
-        ventana.after(0, lambda: etiqueta_estado.config(text="¡Calidades encontradas!", fg="green"))
+        ventana.after(0, lambda: etiqueta_estado.configure(text="¡Calidades encontradas!", fg="green"))
     except Exception as e:
-        ventana.after(0, lambda: etiqueta_estado.config(text="Error al buscar calidades.", fg="red"))
+        ventana.after(0, lambda: etiqueta_estado.configure(text="Error al buscar calidades.", fg="red"))
         print(e)
 
 def iniciar_busqueda():
@@ -263,7 +270,7 @@ def on_url_change(event=None):
     global id_after_busqueda
     if id_after_busqueda:
         ventana.after_cancel(id_after_busqueda)
-    etiqueta_imagen.config(image='')
+    etiqueta_imagen.configure(image='')
     id_after_busqueda = ventana.after(800, iniciar_busqueda)
 
 def actualizar_combobox(*args):
@@ -274,15 +281,15 @@ def actualizar_combobox(*args):
     else:
         opciones = ["Mejor Audio"] + [f"{int(a['abr'])} kbps" for a in formatos_disponibles['audio']]
     
-    combo_calidad['values'] = opciones
+    combo_calidad.configure(values=opciones)
     if opciones:
-        combo_calidad.current(0)
+        combo_calidad.set(opciones[0])
 
 def cancelar_descarga():
     global cancelar_descarga_flag
     cancelar_descarga_flag = True
-    etiqueta_estado.config(text="Cancelando... por favor espere.", fg="red")
-    boton_cancelar.config(state=tk.DISABLED)
+    etiqueta_estado.configure(text="Cancelando... por favor espere.", fg="red")
+    boton_cancelar.configure(state=tk.DISABLED)
 
 def limpiar_temporales(directorio):
     if not directorio or not os.path.exists(directorio):
@@ -299,17 +306,17 @@ def mostrar_miniatura(img_data):
         img = Image.open(BytesIO(img_data))
         img = img.resize((160, 90), Image.Resampling.LANCZOS)
         foto = ImageTk.PhotoImage(img)
-        etiqueta_imagen.config(image=foto)
+        etiqueta_imagen.configure(image=foto)
         etiqueta_imagen.image = foto
     except Exception as e:
         print("Error procesando miniatura:", e)
 
 def actualizar_progreso_ui(percent_float, percent_str, speed, eta):
-    barra_progreso['value'] = percent_float
+    barra_progreso.set(percent_float / 100.0)
     if percent_float < 100:
-        etiqueta_stats.config(text=f"Progreso: {percent_str} | Vel: {speed} | Faltan: {eta}")
+        etiqueta_stats.configure(text=f"Progreso: {percent_str} | Vel: {speed} | Faltan: {eta}")
     else:
-        etiqueta_stats.config(text="Procesando archivo (Uniendo audio/video)...")
+        etiqueta_stats.configure(text="Procesando archivo (Uniendo audio/video)...")
 
 def progress_hook(d):
     global cancelar_descarga_flag
@@ -361,12 +368,12 @@ def descargar():
         messagebox.showwarning("Falta el enlace", "¡Mae, ponga al menos un enlace de YouTube primero!")
         return
 
-    boton_descargar.config(state=tk.DISABLED)
-    boton_cancelar.config(state=tk.NORMAL)
+    boton_descargar.configure(state=tk.DISABLED)
+    boton_cancelar.configure(state=tk.NORMAL)
     
     playlist_items_str = ""
     if len(urls) == 1:
-        etiqueta_estado.config(text="Revisando si es una playlist...", fg="blue")
+        etiqueta_estado.configure(text="Revisando si es una playlist...", fg="blue")
         ydl_opts_flat = {
             'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'extract_flat': True,
@@ -387,44 +394,30 @@ def descargar():
             items_seleccionados = []
             
             def mostrar_popup():
-                popup = tk.Toplevel(ventana)
+                popup = ctk.CTkToplevel(ventana)
                 popup.title("Seleccionar Videos de la Playlist")
                 popup.geometry("400x500")
                 popup.transient(ventana)
                 popup.grab_set()
                 
-                tk.Label(popup, text=f"Se detectó una lista de {len(videos_lista)} videos.\nSelecciona cuáles deseas descargar:", font=("Arial", 10, "bold")).pack(pady=5)
+                ctk.CTkLabel(popup, text=f"Se detectó una lista de {len(videos_lista)} videos.\nSelecciona cuáles deseas descargar:", font=("Arial", 12, "bold")).pack(pady=10)
                 
-                marco_busqueda_popup = tk.Frame(popup)
-                marco_busqueda_popup.pack(fill=tk.X, padx=10, pady=2)
-                tk.Label(marco_busqueda_popup, text="Buscar:").pack(side=tk.LEFT)
-                entrada_busqueda_popup = tk.Entry(marco_busqueda_popup)
-                entrada_busqueda_popup.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+                marco_busqueda_popup = ctk.CTkFrame(popup, fg_color="transparent")
+                marco_busqueda_popup.pack(fill=tk.X, padx=10, pady=5)
+                ctk.CTkLabel(marco_busqueda_popup, text="Buscar:").pack(side=tk.LEFT, padx=(0,5))
+                entrada_busqueda_popup = ctk.CTkEntry(marco_busqueda_popup)
+                entrada_busqueda_popup.pack(side=tk.LEFT, fill=tk.X, expand=True)
                 
-                marco_scroll = ttk.Frame(popup)
-                marco_scroll.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-                
-                canvas = tk.Canvas(marco_scroll)
-                scrollbar = ttk.Scrollbar(marco_scroll, orient="vertical", command=canvas.yview)
-                scrollable_frame = ttk.Frame(canvas)
-                
-                scrollable_frame.bind(
-                    "<Configure>",
-                    lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-                )
-                canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-                canvas.configure(yscrollcommand=scrollbar.set)
-                
-                canvas.pack(side="left", fill="both", expand=True)
-                scrollbar.pack(side="right", fill="y")
+                scrollable_frame = ctk.CTkScrollableFrame(popup)
+                scrollable_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
                 
                 vars_check = {}
                 checkbuttons_refs = {}
                 for v in videos_lista:
-                    var = tk.BooleanVar(value=True)
+                    var = ctk.StringVar(value="on")
                     vars_check[v['index']] = var
-                    cb = tk.Checkbutton(scrollable_frame, text=v['title'], variable=var, wraplength=350, justify="left")
-                    cb.pack(anchor="w", pady=2)
+                    cb = ctk.CTkCheckBox(scrollable_frame, text=v['title'], variable=var, onvalue="on", offvalue="off")
+                    cb.pack(anchor="w", pady=5, padx=5)
                     checkbuttons_refs[v['index']] = {'cb': cb, 'title': v['title'].lower()}
                     
                 def filtrar_popup(event):
@@ -433,7 +426,7 @@ def descargar():
                         idx = v['index']
                         ref = checkbuttons_refs[idx]
                         if busqueda in ref['title']:
-                            ref['cb'].pack(anchor="w", pady=2)
+                            ref['cb'].pack(anchor="w", pady=5, padx=5)
                         else:
                             ref['cb'].pack_forget()
                             
@@ -441,13 +434,13 @@ def descargar():
                     
                 def confirmar():
                     for idx, var in vars_check.items():
-                        if var.get():
+                        if var.get() == "on":
                             items_seleccionados.append(idx)
                     popup.destroy()
                     seleccion_terminada.set()
                     
-                btn = tk.Button(popup, text="Confirmar Selección", command=confirmar, bg="#d90429", fg="white")
-                btn.pack(pady=10)
+                btn = ctk.CTkButton(popup, text="Confirmar Selección", command=confirmar, fg_color="#d90429", hover_color="#ef233c")
+                btn.pack(pady=15)
                 
                 def on_closing():
                     popup.destroy()
@@ -459,17 +452,17 @@ def descargar():
             seleccion_terminada.wait()
             
             if not items_seleccionados:
-                ventana.after(0, lambda: etiqueta_estado.config(text="Descarga cancelada (sin selección).", fg="red"))
-                ventana.after(0, lambda: boton_descargar.config(state=tk.NORMAL))
-                ventana.after(0, lambda: boton_cancelar.config(state=tk.DISABLED))
+                ventana.after(0, lambda: etiqueta_estado.configure(text="Descarga cancelada (sin selección).", fg="red"))
+                ventana.after(0, lambda: boton_descargar.configure(state=tk.NORMAL))
+                ventana.after(0, lambda: boton_cancelar.configure(state=tk.DISABLED))
                 return
                 
             playlist_items_str = ",".join(map(str, items_seleccionados))
             
-    etiqueta_estado.config(text="Descargando... ¡dele un toque!", fg="blue")
+    etiqueta_estado.configure(text="Descargando... ¡dele un toque!", fg="blue")
     
-    ventana.after(0, lambda: barra_progreso.config(value=0))
-    ventana.after(0, lambda: etiqueta_stats.config(text="Iniciando descarga..."))
+    ventana.after(0, lambda: barra_progreso.configure(value=0))
+    ventana.after(0, lambda: etiqueta_stats.configure(text="Iniciando descarga..."))
     
     formato = opcion_var.get()
     
@@ -554,8 +547,8 @@ def descargar():
                     
                 agregar_a_historial(titulo, calidad_str, ruta_final)
                     
-        etiqueta_estado.config(text="¡Descarga completada con éxito!", fg="green")
-        ventana.after(0, lambda: etiqueta_stats.config(text="¡Listo!"))
+        etiqueta_estado.configure(text="¡Descarga completada con éxito!", fg="green")
+        ventana.after(0, lambda: etiqueta_stats.configure(text="¡Listo!"))
         logging.info("--- SESIÓN DE DESCARGA COMPLETADA CON ÉXITO ---")
         try:
             notification.notify(
@@ -568,9 +561,9 @@ def descargar():
             pass
     except Exception as e:
         if str(e) == "Descarga_Cancelada":
-            etiqueta_estado.config(text="Descarga cancelada por el usuario.", fg="red")
-            ventana.after(0, lambda: etiqueta_stats.config(text="Cancelado."))
-            ventana.after(0, lambda: barra_progreso.config(value=0))
+            etiqueta_estado.configure(text="Descarga cancelada por el usuario.", fg="red")
+            ventana.after(0, lambda: etiqueta_stats.configure(text="Cancelado."))
+            ventana.after(0, lambda: barra_progreso.configure(value=0))
             for archivo in archivos_sesion:
                 try:
                     if os.path.exists(archivo):
@@ -582,7 +575,7 @@ def descargar():
                 except:
                     pass
         else:
-            etiqueta_estado.config(text="Hubo un error al descargar.", fg="red")
+            etiqueta_estado.configure(text="Hubo un error al descargar.", fg="red")
             logging.error(f"!!! ERROR FATAL DURANTE LA DESCARGA !!!\nDetalles: {str(e)}")
             ventana.after(0, lambda err=str(e): messagebox.showerror("Error de Descarga", f"Se produjo un error durante la descarga:\n\n{err}\n\nRevisa el archivo dowv_auditoria.log para más detalles."))
             print(e)
@@ -597,87 +590,103 @@ def descargar():
                 pass
     finally:
         limpiar_temporales(destino)
-        boton_descargar.config(state=tk.NORMAL)
-        boton_cancelar.config(state=tk.DISABLED)
+        boton_descargar.configure(state="normal")
+        boton_cancelar.configure(state="disabled")
 
 # --- Diseño de la Ventanita ---
 inicializar_configuracion()
 
-ventana = tk.Tk()
-ventana.title("Descargador de YouTube")
-ventana.geometry("500x600")
+ventana = ctk.CTk()
+ventana.title("DowV - Descargador de YouTube")
+ventana.geometry("550x650")
 
-notebook = ttk.Notebook(ventana)
-notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+# Estilizar el ttk.Treeview para que combine con CustomTkinter
+style = ttk.Style()
+style.theme_use("default")
+style.configure("Treeview", 
+    background="#2b2b2b",
+    foreground="white",
+    rowheight=25,
+    fieldbackground="#2b2b2b",
+    bordercolor="#343638",
+    borderwidth=0)
+style.map('Treeview', background=[('selected', '#1f538d')])
+style.configure("Treeview.Heading",
+    background="#565b5e",
+    foreground="white",
+    relief="flat")
+style.map("Treeview.Heading",
+    background=[('active', '#343638')])
 
-tab_descargas = ttk.Frame(notebook)
-notebook.add(tab_descargas, text="Descargas")
+notebook = ctk.CTkTabview(ventana)
+notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-tab_historial = ttk.Frame(notebook)
-notebook.add(tab_historial, text="Historial")
+tab_descargas = notebook.add("Descargas")
+tab_historial = notebook.add("Historial")
 
 # --- Tab Descargas ---
-tk.Label(tab_descargas, text="Enlaces de YouTube (uno por línea):", font=("Arial", 10)).pack(pady=5)
+ctk.CTkLabel(tab_descargas, text="Enlaces de YouTube (uno por línea):", font=("Arial", 12)).pack(pady=5)
 
-entrada_url = tk.Text(tab_descargas, width=55, height=4)
+entrada_url = ctk.CTkTextbox(tab_descargas, width=450, height=80)
 entrada_url.pack(pady=5)
 entrada_url.bind("<KeyRelease>", on_url_change)
 entrada_url.bind("<<Paste>>", lambda e: ventana.after(10, on_url_change))
 
-etiqueta_imagen = tk.Label(tab_descargas)
+etiqueta_imagen = ctk.CTkLabel(tab_descargas, text="")
 etiqueta_imagen.pack(pady=5)
 
-carpeta_destino = tk.StringVar()
+carpeta_destino = ctk.StringVar()
 
-boton_carpeta = tk.Button(tab_descargas, text="Elegir dónde guardar", command=seleccionar_carpeta)
+boton_carpeta = ctk.CTkButton(tab_descargas, text="Elegir dónde guardar", command=seleccionar_carpeta)
 boton_carpeta.pack(pady=5)
 
-etiqueta_carpeta = tk.Label(tab_descargas, text="", font=("Arial", 8), fg="gray")
+etiqueta_carpeta = ctk.CTkLabel(tab_descargas, text="", font=("Arial", 10), text_color="gray")
 etiqueta_carpeta.pack(pady=2)
 
-opcion_var = tk.StringVar(value="video")
+opcion_var = ctk.StringVar(value="video")
 opcion_var.trace_add('write', actualizar_combobox)
 opcion_var.trace_add('write', actualizar_carpeta_ui)
 actualizar_carpeta_ui()
 
-marco_opciones = tk.Frame(tab_descargas)
+marco_opciones = ctk.CTkFrame(tab_descargas, fg_color="transparent")
 marco_opciones.pack(pady=5)
 
-tk.Radiobutton(marco_opciones, text="Video (MP4)", variable=opcion_var, value="video").pack(side=tk.LEFT, padx=10)
-tk.Radiobutton(marco_opciones, text="Audio (MP3)", variable=opcion_var, value="audio").pack(side=tk.LEFT, padx=10)
+ctk.CTkRadioButton(marco_opciones, text="Video (MP4)", variable=opcion_var, value="video").pack(side=tk.LEFT, padx=10)
+ctk.CTkRadioButton(marco_opciones, text="Audio (MP3)", variable=opcion_var, value="audio").pack(side=tk.LEFT, padx=10)
 
-tk.Label(tab_descargas, text="Calidad:", font=("Arial", 10)).pack(pady=2)
-combo_calidad = ttk.Combobox(tab_descargas, state="readonly", width=30)
+ctk.CTkLabel(tab_descargas, text="Calidad:", font=("Arial", 12)).pack(pady=2)
+combo_calidad = ctk.CTkComboBox(tab_descargas, state="readonly", width=300)
 combo_calidad.pack(pady=5)
 combo_calidad.set("Busca un video primero")
 
-marco_botones = tk.Frame(tab_descargas)
+marco_botones = ctk.CTkFrame(tab_descargas, fg_color="transparent")
 marco_botones.pack(pady=10)
 
-boton_descargar = tk.Button(marco_botones, text="¡Descargar!", command=iniciar_descarga, bg="#d90429", fg="white", font=("Arial", 10, "bold"))
+boton_descargar = ctk.CTkButton(marco_botones, text="¡Descargar!", command=iniciar_descarga, fg_color="#d90429", hover_color="#ef233c", font=("Arial", 12, "bold"))
 boton_descargar.pack(side=tk.LEFT, padx=5)
 
-boton_cancelar = tk.Button(marco_botones, text="Cancelar", command=cancelar_descarga, bg="#8d99ae", fg="white", font=("Arial", 10, "bold"), state=tk.DISABLED)
+boton_cancelar = ctk.CTkButton(marco_botones, text="Cancelar", command=cancelar_descarga, fg_color="#8d99ae", hover_color="#9ca8ba", font=("Arial", 12, "bold"), state="disabled")
 boton_cancelar.pack(side=tk.LEFT, padx=5)
 
-etiqueta_estado = tk.Label(tab_descargas, text="", font=("Arial", 9, "bold"))
+etiqueta_estado = ctk.CTkLabel(tab_descargas, text="", font=("Arial", 12, "bold"))
 etiqueta_estado.pack(pady=2)
 
-barra_progreso = ttk.Progressbar(tab_descargas, orient="horizontal", length=400, mode="determinate")
-barra_progreso.pack(pady=2)
+barra_progreso = ctk.CTkProgressBar(tab_descargas, orientation="horizontal", width=400, mode="determinate")
+barra_progreso.pack(pady=5)
+barra_progreso.set(0)
 
-etiqueta_stats = tk.Label(tab_descargas, text="", font=("Arial", 8), fg="gray")
+etiqueta_stats = ctk.CTkLabel(tab_descargas, text="", font=("Arial", 10), text_color="gray")
 etiqueta_stats.pack(pady=2)
 
 # --- Tab Historial ---
-marco_herramientas_historial = tk.Frame(tab_historial)
+marco_herramientas_historial = ctk.CTkFrame(tab_historial, fg_color="transparent")
 marco_herramientas_historial.pack(fill=tk.X, padx=5, pady=5)
 
-tk.Label(marco_herramientas_historial, text="Buscar:").pack(side=tk.LEFT)
-entrada_busqueda_historial = tk.Entry(marco_herramientas_historial, width=30)
+ctk.CTkLabel(marco_herramientas_historial, text="Buscar:").pack(side=tk.LEFT, padx=(0,5))
+entrada_busqueda_historial = ctk.CTkEntry(marco_herramientas_historial, width=250)
 entrada_busqueda_historial.pack(side=tk.LEFT, padx=5)
 
-boton_limpiar_historial = tk.Button(marco_herramientas_historial, text="Limpiar Historial", command=limpiar_todo_historial, bg="#ff4d4d", fg="white")
+boton_limpiar_historial = ctk.CTkButton(marco_herramientas_historial, text="Limpiar Historial", command=limpiar_todo_historial, fg_color="#ff4d4d", hover_color="#ff6b6b", width=120)
 boton_limpiar_historial.pack(side=tk.RIGHT, padx=5)
 
 columnas = ('titulo', 'calidad', 'fecha', 'ruta')
@@ -698,7 +707,7 @@ arbol_historial.configure(yscroll=scrollbar.set)
 scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 arbol_historial.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-tk.Label(tab_historial, text="Doble clic en un elemento para abrir su ubicación.", font=("Arial", 8), fg="gray").pack(pady=2)
+ctk.CTkLabel(tab_historial, text="Doble clic en un elemento para abrir su ubicación.", font=("Arial", 10), text_color="gray").pack(pady=2)
 
 def refrescar_historial_ui(event=None):
     busqueda = entrada_busqueda_historial.get().lower()
