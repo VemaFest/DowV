@@ -14,6 +14,9 @@ $dataArgs = ""
 if (Test-Path "logo.png") {
     $dataArgs += " --add-data `"logo.png;.`""
 }
+if (Test-Path "logo_icono.png") {
+    $dataArgs += " --add-data `"logo_icono.png;.`""
+}
 if (Test-Path "logo.ico") {
     $dataArgs += " --add-data `"logo.ico;.`""
 }

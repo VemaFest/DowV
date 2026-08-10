@@ -38,15 +38,17 @@ class DowVideoApp(ctk.CTk):
         ruta_icono = self.obtener_ruta_recurso("logo.ico")
         if os.path.exists(ruta_icono):
             try:
-                self.iconbitmap(ruta_icono)
+                # CustomTkinter sometimes needs a slight delay to apply the icon on Windows
+                self.after(200, lambda: self.iconbitmap(ruta_icono))
             except Exception:
                 pass
         
-        ruta_logo_png = self.obtener_ruta_recurso("logo.png")
-        if os.path.exists(ruta_logo_png):
+        ruta_icono_png = self.obtener_ruta_recurso("logo_icono.png")
+        if os.path.exists(ruta_icono_png):
             try:
-                icon_img = ImageTk.PhotoImage(Image.open(ruta_logo_png))
-                self.wm_iconphoto(True, icon_img)
+                # Guardar referencia en self para evitar Garbage Collection
+                self._icon_img = ImageTk.PhotoImage(Image.open(ruta_icono_png))
+                self.after(250, lambda: self.wm_iconphoto(True, self._icon_img))
             except Exception:
                 pass
 
