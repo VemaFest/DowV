@@ -22,7 +22,8 @@ class DowVideoApp(ctk.CTk):
         
         # Setup window
         self.title("DowV - Descargador de YouTube")
-        self.geometry("550x650")
+        self.geometry("750x650") # Un poco mas ancho para el Sidebar + Grid
+        self.minsize(700, 600)
         
         # NOTE: Descomenta esto cuando agregues logo.ico a la carpeta de tu proyecto (o assets/)
         # self.iconbitmap("logo.ico")
@@ -39,99 +40,165 @@ class DowVideoApp(ctk.CTk):
         self.setup_ui()
         
     def setup_ui(self):
-        # Estilizar el ttk.Treeview
-        style = ttk.Style()
-        style.theme_use("default")
-        style.configure("Treeview", 
-            background="#2b2b2b",
-            foreground="white",
-            rowheight=25,
-            fieldbackground="#2b2b2b",
-            bordercolor="#343638",
-            borderwidth=0)
-        style.map('Treeview', background=[('selected', '#1f538d')])
-        style.configure("Treeview.Heading",
-            background="#565b5e",
-            foreground="white",
-            relief="flat")
-        style.map("Treeview.Heading", background=[('active', '#343638')])
+        # Configuracion de color global estricta basada en paletas ColorHunt
+        ctk.set_appearance_mode("dark")
+        
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
 
-        self.notebook = ctk.CTkTabview(self)
-        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # ====== SIDEBAR ======
+        self.sidebar_frame = ctk.CTkFrame(self, width=150, corner_radius=0, fg_color="#222831")
+        self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
+        self.sidebar_frame.grid_rowconfigure(4, weight=1)
+        
+        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="DowVideo", font=ctk.CTkFont(size=22, weight="bold"), text_color="#ff5722")
+        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 30))
 
-        self.tab_descargas = self.notebook.add("Descargas")
-        self.tab_historial = self.notebook.add("Historial")
+        self.btn_descargas = ctk.CTkButton(self.sidebar_frame, text="Descargas", fg_color="transparent", text_color="#eeeeee", hover_color="#2d4059", anchor="w", font=ctk.CTkFont(size=14), command=self.show_descargas)
+        self.btn_descargas.grid(row=1, column=0, padx=10, pady=5, sticky="ew")
 
+        self.btn_historial = ctk.CTkButton(self.sidebar_frame, text="Historial", fg_color="transparent", text_color="#eeeeee", hover_color="#2d4059", anchor="w", font=ctk.CTkFont(size=14), command=self.show_historial)
+        self.btn_historial.grid(row=2, column=0, padx=10, pady=5, sticky="ew")
+
+        # ====== MAIN CONTAINER ======
+        self.main_container = ctk.CTkFrame(self, fg_color="#2d4059", corner_radius=0)
+        self.main_container.grid(row=0, column=1, sticky="nsew")
+        self.main_container.grid_rowconfigure(0, weight=1)
+        self.main_container.grid_columnconfigure(0, weight=1)
+
+        # ====== FRAMES ======
+        self.frame_descargas = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self.frame_historial = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        
         self._build_tab_descargas()
         self._build_tab_historial()
 
-    def _build_tab_descargas(self):
-        ctk.CTkLabel(self.tab_descargas, text="Enlaces de YouTube (uno por línea):", font=("Arial", 12)).pack(pady=5)
+        # Iniciar en Descargas
+        self.show_descargas()
 
-        self.entrada_url = ctk.CTkTextbox(self.tab_descargas, width=450, height=80)
-        self.entrada_url.pack(pady=5)
+    def show_descargas(self):
+        self.frame_historial.grid_forget()
+        self.frame_descargas.grid(row=0, column=0, sticky="nsew", padx=30, pady=30)
+        self.btn_descargas.configure(fg_color="#393e46")
+        self.btn_historial.configure(fg_color="transparent")
+
+    def show_historial(self):
+        self.frame_descargas.grid_forget()
+        self.frame_historial.grid(row=0, column=0, sticky="nsew", padx=30, pady=30)
+        self.btn_historial.configure(fg_color="#393e46")
+        self.btn_descargas.configure(fg_color="transparent")
+        self.refrescar_historial_ui()
+
+    def _build_tab_descargas(self):
+        self.frame_descargas.grid_columnconfigure(0, weight=1)
+        self.frame_descargas.grid_columnconfigure(1, weight=1)
+        self.frame_descargas.grid_rowconfigure(2, weight=1)
+        
+        # TITLE
+        ctk.CTkLabel(self.frame_descargas, text="Ingresa el Enlace de YouTube:", font=ctk.CTkFont(size=14, weight="bold"), text_color="#eeeeee").grid(row=0, column=0, columnspan=2, pady=(0, 5), sticky="w")
+        
+        # URL BOX
+        self.entrada_url = ctk.CTkTextbox(self.frame_descargas, height=60, fg_color="#eeeeee", text_color="#222831")
+        self.entrada_url.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 15))
         self.entrada_url.bind("<KeyRelease>", self.on_url_change)
         self.entrada_url.bind("<<Paste>>", lambda e: self.after(10, self.on_url_change))
 
-        self.etiqueta_imagen = ctk.CTkLabel(self.tab_descargas, text="")
-        self.etiqueta_imagen.pack(pady=5)
-
-        self.carpeta_destino = ctk.StringVar()
-
-        self.boton_carpeta = ctk.CTkButton(self.tab_descargas, text="Elegir dónde guardar", command=self.seleccionar_carpeta)
-        self.boton_carpeta.pack(pady=5)
-
-        self.etiqueta_carpeta = ctk.CTkLabel(self.tab_descargas, text="", font=("Arial", 10), text_color="gray")
-        self.etiqueta_carpeta.pack(pady=2)
-
+        # --- GRID STRUCTURE ---
+        # LEFT COLUMN (SETTINGS)
+        settings_frame = ctk.CTkFrame(self.frame_descargas, fg_color="#393e46", corner_radius=10)
+        settings_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 10))
+        
+        ctk.CTkLabel(settings_frame, text="Configuración", font=ctk.CTkFont(size=14, weight="bold"), text_color="#ff5722").pack(pady=(15, 5))
+        
         self.opcion_var = ctk.StringVar(value="video")
         self.opcion_var.trace_add('write', self.actualizar_combobox)
         self.opcion_var.trace_add('write', self.actualizar_carpeta_ui)
+        
+        radio_frame = ctk.CTkFrame(settings_frame, fg_color="transparent")
+        radio_frame.pack(pady=5)
+        ctk.CTkRadioButton(radio_frame, text="Video", variable=self.opcion_var, value="video", fg_color="#ff5722", hover_color="#ec5b38").pack(side="left", padx=10)
+        ctk.CTkRadioButton(radio_frame, text="Audio", variable=self.opcion_var, value="audio", fg_color="#ff5722", hover_color="#ec5b38").pack(side="left", padx=10)
+
+        ctk.CTkLabel(settings_frame, text="Calidad:", font=ctk.CTkFont(size=12)).pack(pady=(10, 0))
+        self.combo_calidad = ctk.CTkComboBox(settings_frame, state="readonly", fg_color="#eeeeee", text_color="#222831", button_color="#a8a492")
+        self.combo_calidad.pack(pady=5, padx=20, fill="x")
+        self.combo_calidad.set("Busca un video primero")
+        
+        ctk.CTkLabel(settings_frame, text="Guardar en:", font=ctk.CTkFont(size=12)).pack(pady=(10, 0))
+        self.carpeta_destino = ctk.StringVar()
+        self.etiqueta_carpeta = ctk.CTkLabel(settings_frame, text="", font=ctk.CTkFont(size=10), text_color="#a8a492")
+        self.etiqueta_carpeta.pack(pady=0, padx=10)
+        
+        btn_folder = ctk.CTkButton(settings_frame, text="Cambiar Carpeta", command=self.seleccionar_carpeta, fg_color="#524646", hover_color="#a8a492")
+        btn_folder.pack(pady=10)
+
         self.actualizar_carpeta_ui()
 
-        marco_opciones = ctk.CTkFrame(self.tab_descargas, fg_color="transparent")
-        marco_opciones.pack(pady=5)
+        # RIGHT COLUMN (THUMBNAIL & PREVIEW)
+        preview_frame = ctk.CTkFrame(self.frame_descargas, fg_color="#393e46", corner_radius=10)
+        preview_frame.grid(row=2, column=1, sticky="nsew", padx=(10, 0))
+        
+        ctk.CTkLabel(preview_frame, text="Vista Previa", font=ctk.CTkFont(size=14, weight="bold"), text_color="#ff5722").pack(pady=(15, 5))
+        
+        self.etiqueta_imagen = ctk.CTkLabel(preview_frame, text="Sin miniatura", fg_color="#222831", width=240, height=135, corner_radius=8)
+        self.etiqueta_imagen.pack(pady=10, padx=20, expand=True)
 
-        ctk.CTkRadioButton(marco_opciones, text="Video (MP4)", variable=self.opcion_var, value="video").pack(side=tk.LEFT, padx=10)
-        ctk.CTkRadioButton(marco_opciones, text="Audio (MP3)", variable=self.opcion_var, value="audio").pack(side=tk.LEFT, padx=10)
-
-        ctk.CTkLabel(self.tab_descargas, text="Calidad:", font=("Arial", 12)).pack(pady=2)
-        self.combo_calidad = ctk.CTkComboBox(self.tab_descargas, state="readonly", width=300)
-        self.combo_calidad.pack(pady=5)
-        self.combo_calidad.set("Busca un video primero")
-
-        marco_botones = ctk.CTkFrame(self.tab_descargas, fg_color="transparent")
-        marco_botones.pack(pady=10)
-
-        self.boton_descargar = ctk.CTkButton(marco_botones, text="¡Descargar!", command=self.iniciar_descarga, fg_color="#d90429", hover_color="#ef233c", font=("Arial", 12, "bold"))
-        self.boton_descargar.pack(side=tk.LEFT, padx=5)
-
-        self.boton_cancelar = ctk.CTkButton(marco_botones, text="Cancelar", command=self.cancelar_descarga, fg_color="#8d99ae", hover_color="#9ca8ba", font=("Arial", 12, "bold"), state="disabled")
-        self.boton_cancelar.pack(side=tk.LEFT, padx=5)
-
-        self.etiqueta_estado = ctk.CTkLabel(self.tab_descargas, text="", font=("Arial", 12, "bold"))
-        self.etiqueta_estado.pack(pady=2)
-
-        self.barra_progreso = ctk.CTkProgressBar(self.tab_descargas, orientation="horizontal", width=400, mode="determinate")
-        self.barra_progreso.pack(pady=5)
+        # BOTTOM (ACTIONS & PROGRESS)
+        action_frame = ctk.CTkFrame(self.frame_descargas, fg_color="transparent")
+        action_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(20, 0))
+        
+        self.boton_descargar = ctk.CTkButton(action_frame, text="DESCARGAR", font=ctk.CTkFont(size=16, weight="bold"), command=self.iniciar_descarga, fg_color="#ff5722", hover_color="#ec5b38", height=45)
+        self.boton_descargar.pack(side="left", padx=(0, 10), expand=True, fill="x")
+        
+        self.boton_cancelar = ctk.CTkButton(action_frame, text="Cancelar", font=ctk.CTkFont(size=14, weight="bold"), command=self.cancelar_descarga, fg_color="#524646", hover_color="#a8a492", state="disabled", height=45)
+        self.boton_cancelar.pack(side="left", padx=(10, 0))
+        
+        self.etiqueta_estado = ctk.CTkLabel(self.frame_descargas, text="", font=ctk.CTkFont(size=12, weight="bold"))
+        self.etiqueta_estado.grid(row=4, column=0, columnspan=2, pady=(10, 0))
+        
+        self.barra_progreso = ctk.CTkProgressBar(self.frame_descargas, orientation="horizontal", mode="determinate", progress_color="#ff5722")
+        self.barra_progreso.grid(row=5, column=0, columnspan=2, sticky="ew", pady=5)
         self.barra_progreso.set(0)
-
-        self.etiqueta_stats = ctk.CTkLabel(self.tab_descargas, text="", font=("Arial", 10), text_color="gray")
-        self.etiqueta_stats.pack(pady=2)
+        
+        self.etiqueta_stats = ctk.CTkLabel(self.frame_descargas, text="", font=ctk.CTkFont(size=11), text_color="#a8a492")
+        self.etiqueta_stats.grid(row=6, column=0, columnspan=2)
 
     def _build_tab_historial(self):
-        marco_herramientas = ctk.CTkFrame(self.tab_historial, fg_color="transparent")
-        marco_herramientas.pack(fill=tk.X, padx=5, pady=5)
+        self.frame_historial.grid_rowconfigure(1, weight=1)
+        self.frame_historial.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(self.frame_historial, text="Historial de Descargas", font=ctk.CTkFont(size=18, weight="bold"), text_color="#eeeeee").grid(row=0, column=0, sticky="w", pady=(0, 15))
+        
+        marco_herramientas = ctk.CTkFrame(self.frame_historial, fg_color="transparent")
+        marco_herramientas.grid(row=1, column=0, sticky="ew", pady=(0, 10))
 
-        ctk.CTkLabel(marco_herramientas, text="Buscar:").pack(side=tk.LEFT, padx=(0,5))
-        self.entrada_busqueda_historial = ctk.CTkEntry(marco_herramientas, width=250)
+        ctk.CTkLabel(marco_herramientas, text="Buscar:", text_color="#eeeeee").pack(side=tk.LEFT, padx=(0,5))
+        self.entrada_busqueda_historial = ctk.CTkEntry(marco_herramientas, width=250, fg_color="#eeeeee", text_color="#222831")
         self.entrada_busqueda_historial.pack(side=tk.LEFT, padx=5)
 
-        self.boton_limpiar = ctk.CTkButton(marco_herramientas, text="Limpiar Historial", command=self.limpiar_todo_historial_wrapper, fg_color="#ff4d4d", hover_color="#ff6b6b", width=120)
+        self.boton_limpiar = ctk.CTkButton(marco_herramientas, text="Limpiar Historial", command=self.limpiar_todo_historial_wrapper, fg_color="#ec5b38", hover_color="#ff5722")
         self.boton_limpiar.pack(side=tk.RIGHT, padx=5)
 
+        # Theme
+        style = ttk.Style()
+        style.theme_use("default")
+        style.configure("Treeview", 
+            background="#393e46",
+            foreground="#eeeeee",
+            rowheight=30,
+            fieldbackground="#393e46",
+            bordercolor="#222831",
+            borderwidth=0)
+        style.map('Treeview', background=[('selected', '#ff5722')])
+        style.configure("Treeview.Heading",
+            background="#222831",
+            foreground="#ff5722",
+            relief="flat",
+            font=("Arial", 10, "bold"))
+        style.map("Treeview.Heading", background=[('active', '#524646')])
+
         columnas = ('titulo', 'calidad', 'fecha', 'ruta')
-        self.arbol_historial = ttk.Treeview(self.tab_historial, columns=columnas, show='headings')
+        self.arbol_historial = ttk.Treeview(self.frame_historial, columns=columnas, show='headings')
         self.arbol_historial.heading('titulo', text='Título')
         self.arbol_historial.heading('calidad', text='Calidad')
         self.arbol_historial.heading('fecha', text='Fecha')
@@ -142,17 +209,16 @@ class DowVideoApp(ctk.CTk):
         self.arbol_historial.column('fecha', width=120)
         self.arbol_historial.column('ruta', width=0, stretch=tk.NO) 
 
-        scrollbar = ttk.Scrollbar(self.tab_historial, orient=tk.VERTICAL, command=self.arbol_historial.yview)
+        scrollbar = ttk.Scrollbar(self.frame_historial, orient=tk.VERTICAL, command=self.arbol_historial.yview)
         self.arbol_historial.configure(yscroll=scrollbar.set)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.arbol_historial.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.arbol_historial.grid(row=2, column=0, sticky="nsew")
+        scrollbar.grid(row=2, column=1, sticky="ns")
 
-        ctk.CTkLabel(self.tab_historial, text="Doble clic en un elemento para abrir su ubicación.", font=("Arial", 10), text_color="gray").pack(pady=2)
+        ctk.CTkLabel(self.frame_historial, text="Doble clic en un elemento para abrir su ubicación.", font=ctk.CTkFont(size=11), text_color="#a8a492").grid(row=3, column=0, pady=5)
 
         self.entrada_busqueda_historial.bind('<KeyRelease>', self.refrescar_historial_ui)
         self.arbol_historial.bind('<Double-1>', self.abrir_ruta_historial)
-        
-        self.refrescar_historial_ui()
 
     def limpiar_todo_historial_wrapper(self):
         if messagebox.askyesno("Confirmar", "¿Seguro que deseas borrar todo el historial?"):
@@ -222,7 +288,7 @@ class DowVideoApp(ctk.CTk):
     def on_url_change(self, event=None):
         if self.id_after_busqueda:
             self.after_cancel(self.id_after_busqueda)
-        self.etiqueta_imagen.configure(image='')
+        self.etiqueta_imagen.configure(image='', text="Buscando...")
         self.id_after_busqueda = self.after(800, self.iniciar_busqueda)
 
     def iniciar_busqueda(self):
@@ -233,9 +299,10 @@ class DowVideoApp(ctk.CTk):
     def mostrar_miniatura(self, img_data):
         try:
             img = Image.open(BytesIO(img_data))
-            img = img.resize((160, 90), Image.Resampling.LANCZOS)
+            # Ajustado para que el Thumbnail sea más grande (16:9 approx)
+            img = img.resize((240, 135), Image.Resampling.LANCZOS)
             foto = ImageTk.PhotoImage(img)
-            self.etiqueta_imagen.configure(image=foto)
+            self.etiqueta_imagen.configure(image=foto, text="")
             self.etiqueta_imagen.image = foto
         except Exception as e:
             print("Error procesando miniatura:", e)
@@ -246,7 +313,7 @@ class DowVideoApp(ctk.CTk):
             return
         
         url = urls[0]
-        self.etiqueta_estado.configure(text="Buscando calidades automáticamente...", text_color="#3a86ff")
+        self.after(0, lambda: self.etiqueta_estado.configure(text="Buscando calidades automáticamente...", text_color="#ec5b38"))
         
         ydl_opts = {
             'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
@@ -294,7 +361,7 @@ class DowVideoApp(ctk.CTk):
             self.formatos_disponibles['audio'].sort(key=lambda x: x['abr'], reverse=True)
             
             self.after(0, self.actualizar_combobox)
-            self.after(0, lambda: self.etiqueta_estado.configure(text="¡Calidades encontradas!", text_color="#00b4d8"))
+            self.after(0, lambda: self.etiqueta_estado.configure(text="¡Calidades encontradas!", text_color="#eeeeee"))
         except Exception as e:
             self.after(0, lambda: self.etiqueta_estado.configure(text="Error al buscar calidades.", text_color="#ff4d4d"))
             print(e)
@@ -366,7 +433,7 @@ class DowVideoApp(ctk.CTk):
         
         playlist_items_str = ""
         if len(urls) == 1:
-            self.etiqueta_estado.configure(text="Revisando si es una playlist...", text_color="#3a86ff")
+            self.after(0, lambda: self.etiqueta_estado.configure(text="Revisando si es una playlist...", text_color="#ec5b38"))
             ydl_opts_flat = {
                 'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
                 'extract_flat': True,
@@ -432,7 +499,7 @@ class DowVideoApp(ctk.CTk):
                         popup.destroy()
                         seleccion_terminada.set()
                         
-                    btn = ctk.CTkButton(popup, text="Confirmar Selección", command=confirmar, fg_color="#d90429", hover_color="#ef233c")
+                    btn = ctk.CTkButton(popup, text="Confirmar Selección", command=confirmar, fg_color="#ff5722", hover_color="#ec5b38")
                     btn.pack(pady=15)
                     
                     def on_closing():
@@ -452,8 +519,7 @@ class DowVideoApp(ctk.CTk):
                     
                 playlist_items_str = ",".join(map(str, items_seleccionados))
                 
-        self.etiqueta_estado.configure(text="Descargando... ¡dele un toque!", text_color="#3a86ff")
-        
+        self.after(0, lambda: self.etiqueta_estado.configure(text="Descargando... ¡dele un toque!", text_color="#eeeeee"))
         self.after(0, lambda: self.barra_progreso.set(0))
         self.after(0, lambda: self.etiqueta_stats.configure(text="Iniciando descarga..."))
         
@@ -539,7 +605,7 @@ class DowVideoApp(ctk.CTk):
                     self.after(0, lambda t=titulo, c=calidad_str, r=ruta_final: agregar_a_historial(t, c, r))
                     self.after(0, self.refrescar_historial_ui)
                         
-            self.etiqueta_estado.configure(text="¡Descarga completada con éxito!", text_color="#00b4d8")
+            self.after(0, lambda: self.etiqueta_estado.configure(text="¡Descarga completada con éxito!", text_color="#eeeeee"))
             self.after(0, lambda: self.etiqueta_stats.configure(text="¡Listo!"))
             logging.info("--- SESIÓN DE DESCARGA COMPLETADA CON ÉXITO ---")
             try:
@@ -553,7 +619,7 @@ class DowVideoApp(ctk.CTk):
                 pass
         except Exception as e:
             if str(e) == "Descarga_Cancelada":
-                self.etiqueta_estado.configure(text="Descarga cancelada por el usuario.", text_color="#ff4d4d")
+                self.after(0, lambda: self.etiqueta_estado.configure(text="Descarga cancelada por el usuario.", text_color="#ff4d4d"))
                 self.after(0, lambda: self.etiqueta_stats.configure(text="Cancelado."))
                 self.after(0, lambda: self.barra_progreso.set(0))
                 for archivo in self.archivos_sesion:
@@ -567,7 +633,7 @@ class DowVideoApp(ctk.CTk):
                     except:
                         pass
             else:
-                self.etiqueta_estado.configure(text="Hubo un error al descargar.", text_color="#ff4d4d")
+                self.after(0, lambda: self.etiqueta_estado.configure(text="Hubo un error al descargar.", text_color="#ff4d4d"))
                 logging.error(f"!!! ERROR FATAL DURANTE LA DESCARGA !!!\nDetalles: {str(e)}")
                 self.after(0, lambda err=str(e): messagebox.showerror("Error de Descarga", f"Se produjo un error durante la descarga:\n\n{err}\n\nRevisa el archivo dowv_auditoria.log para más detalles."))
                 print(e)
