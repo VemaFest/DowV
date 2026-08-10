@@ -27,13 +27,11 @@ def seleccionar_carpeta():
         guardar_config(carpeta)
 
 def buscar_calidades_hilo():
-    url = entrada_url.get()
-    if not url:
-        messagebox.showwarning("Falta el enlace", "¡Mae, ponga un enlace de YouTube primero!")
+    url = var_url.get().strip()
+    if not url.startswith("http"):
         return
     
-    boton_buscar.config(state=tk.DISABLED)
-    etiqueta_estado.config(text="Buscando calidades...", fg="blue")
+    etiqueta_estado.config(text="Buscando calidades automáticamente...", fg="blue")
     
     ydl_opts = {
         'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
@@ -69,11 +67,16 @@ def buscar_calidades_hilo():
     except Exception as e:
         ventana.after(0, lambda: etiqueta_estado.config(text="Error al buscar calidades.", fg="red"))
         print(e)
-    finally:
-        ventana.after(0, lambda: boton_buscar.config(state=tk.NORMAL))
 
 def iniciar_busqueda():
     threading.Thread(target=buscar_calidades_hilo, daemon=True).start()
+
+id_after_busqueda = None
+def on_url_change(*args):
+    global id_after_busqueda
+    if id_after_busqueda:
+        ventana.after_cancel(id_after_busqueda)
+    id_after_busqueda = ventana.after(800, iniciar_busqueda)
 
 def actualizar_combobox(*args):
     tipo = opcion_var.get()
@@ -93,7 +96,7 @@ def iniciar_descarga():
     hilo.start()
 
 def descargar():
-    url = entrada_url.get()
+    url = var_url.get().strip()
     if not url:
         messagebox.showwarning("Falta el enlace", "¡Mae, ponga un enlace de YouTube primero!")
         return
@@ -158,15 +161,14 @@ def descargar():
 # --- Diseño de la Ventanita ---
 ventana = tk.Tk()
 ventana.title("Descargador de YouTube")
-ventana.geometry("450x450")
+ventana.geometry("450x420")
 
 tk.Label(ventana, text="Enlace de YouTube:", font=("Arial", 10)).pack(pady=5)
 
-entrada_url = tk.Entry(ventana, width=50)
+var_url = tk.StringVar()
+var_url.trace_add('write', on_url_change)
+entrada_url = tk.Entry(ventana, width=50, textvariable=var_url)
 entrada_url.pack(pady=5)
-
-boton_buscar = tk.Button(ventana, text="Buscar Calidades", command=iniciar_busqueda, bg="#0077b6", fg="white")
-boton_buscar.pack(pady=5)
 
 carpeta_destino = tk.StringVar()
 config_data = cargar_config()
