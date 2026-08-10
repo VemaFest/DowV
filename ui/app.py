@@ -612,6 +612,10 @@ class DowVideoApp(ctk.CTk):
             self.after(0, lambda: self.etiqueta_estado.configure(text="¡Descarga completada con éxito!", text_color="#eeeeee"))
             self.after(0, lambda: self.etiqueta_stats.configure(text="¡Listo!"))
             logging.info("--- SESIÓN DE DESCARGA COMPLETADA CON ÉXITO ---")
+            
+            if ruta_final and os.path.exists(ruta_final):
+                self.after(0, lambda r=ruta_final: subprocess.Popen(f'explorer /select,"{r}"'))
+                
             try:
                 notification.notify(
                     title="DowV - Éxito",
