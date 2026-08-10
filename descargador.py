@@ -283,6 +283,89 @@ def descargar():
 
     boton_descargar.config(state=tk.DISABLED)
     boton_cancelar.config(state=tk.NORMAL)
+    
+    playlist_items_str = ""
+    if len(urls) == 1:
+        etiqueta_estado.config(text="Revisando si es una playlist...", fg="blue")
+        ydl_opts_flat = {
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+            'extract_flat': True,
+        }
+        videos_lista = []
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts_flat) as ydl:
+                info = ydl.extract_info(urls[0], download=False)
+                if 'entries' in info:
+                    for i, entry in enumerate(info['entries']):
+                        if entry:
+                            videos_lista.append({'index': i+1, 'title': entry.get('title', f'Video {i+1}')})
+        except Exception:
+            pass
+            
+        if len(videos_lista) > 1:
+            seleccion_terminada = threading.Event()
+            items_seleccionados = []
+            
+            def mostrar_popup():
+                popup = tk.Toplevel(ventana)
+                popup.title("Seleccionar Videos de la Playlist")
+                popup.geometry("400x500")
+                popup.transient(ventana)
+                popup.grab_set()
+                
+                tk.Label(popup, text=f"Se detectó una lista de {len(videos_lista)} videos.\nSelecciona cuáles deseas descargar:", font=("Arial", 10, "bold")).pack(pady=10)
+                
+                marco_scroll = ttk.Frame(popup)
+                marco_scroll.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+                
+                canvas = tk.Canvas(marco_scroll)
+                scrollbar = ttk.Scrollbar(marco_scroll, orient="vertical", command=canvas.yview)
+                scrollable_frame = ttk.Frame(canvas)
+                
+                scrollable_frame.bind(
+                    "<Configure>",
+                    lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+                )
+                canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+                canvas.configure(yscrollcommand=scrollbar.set)
+                
+                canvas.pack(side="left", fill="both", expand=True)
+                scrollbar.pack(side="right", fill="y")
+                
+                vars_check = {}
+                for v in videos_lista:
+                    var = tk.BooleanVar(value=True)
+                    vars_check[v['index']] = var
+                    cb = tk.Checkbutton(scrollable_frame, text=v['title'], variable=var, wraplength=350, justify="left")
+                    cb.pack(anchor="w", pady=2)
+                    
+                def confirmar():
+                    for idx, var in vars_check.items():
+                        if var.get():
+                            items_seleccionados.append(idx)
+                    popup.destroy()
+                    seleccion_terminada.set()
+                    
+                btn = tk.Button(popup, text="Confirmar Selección", command=confirmar, bg="#d90429", fg="white")
+                btn.pack(pady=10)
+                
+                def on_closing():
+                    popup.destroy()
+                    seleccion_terminada.set()
+                    
+                popup.protocol("WM_DELETE_WINDOW", on_closing)
+                
+            ventana.after(0, mostrar_popup)
+            seleccion_terminada.wait()
+            
+            if not items_seleccionados:
+                ventana.after(0, lambda: etiqueta_estado.config(text="Descarga cancelada (sin selección).", fg="red"))
+                ventana.after(0, lambda: boton_descargar.config(state=tk.NORMAL))
+                ventana.after(0, lambda: boton_cancelar.config(state=tk.DISABLED))
+                return
+                
+            playlist_items_str = ",".join(map(str, items_seleccionados))
+            
     etiqueta_estado.config(text="Descargando... ¡dele un toque!", fg="blue")
     
     ventana.after(0, lambda: barra_progreso.config(value=0))
@@ -297,6 +380,9 @@ def descargar():
         'postprocessor_hooks': [postprocessor_hook],
         'nooverwrites': True,
     }
+    
+    if playlist_items_str:
+        ydl_opts['playlist_items'] = playlist_items_str
 
     destino = carpeta_destino.get()
     if destino:
