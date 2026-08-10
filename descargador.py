@@ -19,6 +19,28 @@ def guardar_config(ruta):
 
 formatos_disponibles = {'video': [], 'audio': []}
 
+def obtener_ruta_defecto(tipo):
+    perfil = os.environ.get('USERPROFILE', os.path.expanduser('~'))
+    if tipo == "video":
+        return os.path.join(perfil, 'Videos')
+    else:
+        return os.path.join(perfil, 'Music')
+
+def actualizar_carpeta_ui(*args):
+    tipo = opcion_var.get()
+    ruta_actual = carpeta_destino.get()
+    
+    ruta_video = obtener_ruta_defecto("video")
+    ruta_audio = obtener_ruta_defecto("audio")
+    
+    if not ruta_actual or ruta_actual == ruta_video or ruta_actual == ruta_audio:
+        nueva_ruta = obtener_ruta_defecto(tipo)
+        carpeta_destino.set(nueva_ruta)
+        etiqueta_carpeta.config(text=f"Carpeta: {nueva_ruta}")
+        guardar_config(nueva_ruta)
+    else:
+        etiqueta_carpeta.config(text=f"Carpeta: {ruta_actual}")
+
 def seleccionar_carpeta():
     carpeta = filedialog.askdirectory()
     if carpeta:
@@ -179,12 +201,13 @@ if ruta_guardada:
 boton_carpeta = tk.Button(ventana, text="Elegir dónde guardar", command=seleccionar_carpeta)
 boton_carpeta.pack(pady=5)
 
-texto_ruta = ruta_guardada if ruta_guardada else "(misma carpeta del programa)"
-etiqueta_carpeta = tk.Label(ventana, text=f"Carpeta: {texto_ruta}", font=("Arial", 8), fg="gray")
+etiqueta_carpeta = tk.Label(ventana, text="", font=("Arial", 8), fg="gray")
 etiqueta_carpeta.pack(pady=2)
 
 opcion_var = tk.StringVar(value="video")
 opcion_var.trace_add('write', actualizar_combobox)
+opcion_var.trace_add('write', actualizar_carpeta_ui)
+actualizar_carpeta_ui()
 
 marco_opciones = tk.Frame(ventana)
 marco_opciones.pack(pady=5)
