@@ -9,13 +9,39 @@ CONFIG_FILE = "config.json"
 
 def cargar_config():
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                data = json.load(f)
+                if 'carpeta_destino' in data:
+                    del data['carpeta_destino']
+                    with open(CONFIG_FILE, 'w') as out_f:
+                        json.dump(data, out_f, indent=4)
+                return data
+        except Exception:
+            return {}
     return {}
 
-def guardar_config(ruta):
+def guardar_config(tipo, ruta):
+    config = cargar_config()
+    config[f'carpeta_{tipo}'] = ruta
     with open(CONFIG_FILE, 'w') as f:
-        json.dump({'carpeta_destino': ruta}, f)
+        json.dump(config, f, indent=4)
+
+def inicializar_configuracion():
+    config = cargar_config()
+    modificado = False
+    
+    if 'carpeta_video' not in config:
+        config['carpeta_video'] = obtener_ruta_defecto("video")
+        modificado = True
+        
+    if 'carpeta_audio' not in config:
+        config['carpeta_audio'] = obtener_ruta_defecto("audio")
+        modificado = True
+        
+    if modificado:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=4)
 
 formatos_disponibles = {'video': [], 'audio': []}
 
@@ -34,29 +60,25 @@ def obtener_ruta_defecto(tipo):
 
 def actualizar_carpeta_ui(*args):
     tipo = opcion_var.get()
-    ruta_actual = carpeta_destino.get()
+    config = cargar_config()
+    key = f'carpeta_{tipo}'
     
-    ruta_video = obtener_ruta_defecto("video")
-    ruta_audio = obtener_ruta_defecto("audio")
-    
-    perfil = os.environ.get('USERPROFILE', os.path.expanduser('~'))
-    old_video = os.path.join(perfil, 'Videos')
-    old_audio = os.path.join(perfil, 'Music')
-    
-    if not ruta_actual or ruta_actual in (ruta_video, ruta_audio, old_video, old_audio):
-        nueva_ruta = obtener_ruta_defecto(tipo)
-        carpeta_destino.set(nueva_ruta)
-        etiqueta_carpeta.config(text=f"Carpeta: {nueva_ruta}")
-        guardar_config(nueva_ruta)
+    if key in config:
+        nueva_ruta = config[key]
     else:
-        etiqueta_carpeta.config(text=f"Carpeta: {ruta_actual}")
+        nueva_ruta = obtener_ruta_defecto(tipo)
+        guardar_config(tipo, nueva_ruta)
+        
+    carpeta_destino.set(nueva_ruta)
+    etiqueta_carpeta.config(text=f"Carpeta: {nueva_ruta}")
 
 def seleccionar_carpeta():
     carpeta = filedialog.askdirectory()
     if carpeta:
+        tipo = opcion_var.get()
         carpeta_destino.set(carpeta)
         etiqueta_carpeta.config(text=f"Carpeta: {carpeta}")
-        guardar_config(carpeta)
+        guardar_config(tipo, carpeta)
 
 def obtener_urls():
     texto = entrada_url.get("1.0", tk.END).strip()
@@ -260,6 +282,8 @@ def descargar():
         boton_cancelar.config(state=tk.DISABLED)
 
 # --- Diseño de la Ventanita ---
+inicializar_configuracion()
+
 ventana = tk.Tk()
 ventana.title("Descargador de YouTube")
 ventana.geometry("450x480")
@@ -272,10 +296,6 @@ entrada_url.bind("<KeyRelease>", on_url_change)
 entrada_url.bind("<<Paste>>", lambda e: ventana.after(10, on_url_change))
 
 carpeta_destino = tk.StringVar()
-config_data = cargar_config()
-ruta_guardada = config_data.get('carpeta_destino', '')
-if ruta_guardada:
-    carpeta_destino.set(ruta_guardada)
 
 boton_carpeta = tk.Button(ventana, text="Elegir dónde guardar", command=seleccionar_carpeta)
 boton_carpeta.pack(pady=5)
