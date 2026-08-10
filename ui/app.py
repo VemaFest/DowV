@@ -405,14 +405,18 @@ class DowVideoApp(ctk.CTk):
             
         if d['status'] == 'downloading':
             try:
-                percent = d.get('_percent_str', '0.0%').strip()
-                percent_float = float(percent.replace('%', ''))
-                speed = d.get('_speed_str', 'N/A').strip()
-                eta = d.get('_eta_str', 'N/A').strip()
+                import re
+                # yt-dlp a veces incluye códigos ANSI de color en estos strings, hay que limpiarlos
+                percent_raw = d.get('_percent_str', '0.0%')
+                percent_clean = re.sub(r'\x1b[^m]*m', '', percent_raw).strip()
+                percent_float = float(percent_clean.replace('%', ''))
                 
-                self.after(0, lambda pf=percent_float, ps=percent, sp=speed, e=eta: self.actualizar_progreso_ui(pf, ps, sp, e))
-            except Exception:
-                pass
+                speed = re.sub(r'\x1b[^m]*m', '', d.get('_speed_str', 'N/A')).strip()
+                eta = re.sub(r'\x1b[^m]*m', '', d.get('_eta_str', 'N/A')).strip()
+                
+                self.after(0, lambda pf=percent_float, ps=percent_clean, sp=speed, e=eta: self.actualizar_progreso_ui(pf, ps, sp, e))
+            except Exception as ex:
+                print("Error en progreso:", ex)
 
     def postprocessor_hook(self, d):
         if self.cancelar_descarga_flag:
