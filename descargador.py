@@ -4,6 +4,7 @@ import yt_dlp
 import threading
 import os
 import json
+import re
 
 CONFIG_FILE = "config.json"
 
@@ -172,14 +173,41 @@ def limpiar_temporales(directorio):
             except:
                 pass
 
+def actualizar_progreso_ui(percent_float, percent_str, speed, eta):
+    barra_progreso['value'] = percent_float
+    if percent_float < 100:
+        etiqueta_stats.config(text=f"Progreso: {percent_str} | Vel: {speed} | Faltan: {eta}")
+    else:
+        etiqueta_stats.config(text="Procesando archivo (Uniendo audio/video)...")
+
 def progress_hook(d):
     global cancelar_descarga_flag
     if cancelar_descarga_flag:
         raise Exception("Descarga_Cancelada")
     
-    if d['status'] in ('downloading', 'finished'):
+    if d['status'] == 'downloading':
         if 'filename' in d:
             archivos_sesion.add(d['filename'])
+            
+        total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+        downloaded = d.get('downloaded_bytes', 0)
+        percent_float = (downloaded / total_bytes * 100) if total_bytes > 0 else 0.0
+        
+        speed = d.get('_speed_str', 'N/A').strip()
+        eta = d.get('_eta_str', 'N/A').strip()
+        percent_str = d.get('_percent_str', f'{percent_float:.1f}%').strip()
+        
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        speed = ansi_escape.sub('', speed)
+        eta = ansi_escape.sub('', eta)
+        percent_str = ansi_escape.sub('', percent_str)
+        
+        ventana.after(0, lambda p=percent_float, ps=percent_str, s=speed, e=eta: actualizar_progreso_ui(p, ps, s, e))
+        
+    elif d['status'] == 'finished':
+        if 'filename' in d:
+            archivos_sesion.add(d['filename'])
+        ventana.after(0, lambda: actualizar_progreso_ui(100.0, "100%", "N/A", "00:00"))
 
 def postprocessor_hook(d):
     if d['status'] == 'finished':
@@ -205,6 +233,9 @@ def descargar():
     boton_descargar.config(state=tk.DISABLED)
     boton_cancelar.config(state=tk.NORMAL)
     etiqueta_estado.config(text="Descargando... ¡dele un toque!", fg="blue")
+    
+    ventana.after(0, lambda: barra_progreso.config(value=0))
+    ventana.after(0, lambda: etiqueta_stats.config(text="Iniciando descarga..."))
     
     formato = opcion_var.get()
     
@@ -260,9 +291,12 @@ def descargar():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download(urls)
         etiqueta_estado.config(text="¡Descarga completada con éxito!", fg="green")
+        ventana.after(0, lambda: etiqueta_stats.config(text="¡Listo!"))
     except Exception as e:
         if str(e) == "Descarga_Cancelada":
             etiqueta_estado.config(text="Descarga cancelada por el usuario.", fg="red")
+            ventana.after(0, lambda: etiqueta_stats.config(text="Cancelado."))
+            ventana.after(0, lambda: barra_progreso.config(value=0))
             for archivo in archivos_sesion:
                 try:
                     if os.path.exists(archivo):
@@ -330,5 +364,11 @@ boton_cancelar.pack(side=tk.LEFT, padx=5)
 
 etiqueta_estado = tk.Label(ventana, text="", font=("Arial", 9, "bold"))
 etiqueta_estado.pack(pady=5)
+
+barra_progreso = ttk.Progressbar(ventana, orient="horizontal", length=400, mode="determinate")
+barra_progreso.pack(pady=5)
+
+etiqueta_stats = tk.Label(ventana, text="", font=("Arial", 8), fg="gray")
+etiqueta_stats.pack(pady=2)
 
 ventana.mainloop()
