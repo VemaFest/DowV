@@ -26,8 +26,9 @@ class DowVideoApp(ctk.CTk):
         self.geometry("750x650") # Un poco mas ancho para el Sidebar + Grid
         self.minsize(700, 600)
         
-        # NOTE: Descomenta esto cuando agregues logo.ico a la carpeta de tu proyecto (o assets/)
-        # self.iconbitmap("logo.ico")
+        ruta_icono = self.obtener_ruta_recurso("logo.ico")
+        if os.path.exists(ruta_icono):
+            self.iconbitmap(ruta_icono)
 
         # Configurar y inicializar dependencias
         inicializar_configuracion()
@@ -52,7 +53,13 @@ class DowVideoApp(ctk.CTk):
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(4, weight=1)
         
-        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="DowVideo", font=ctk.CTkFont(size=22, weight="bold"), text_color="#ffffff")
+        ruta_logo_png = self.obtener_ruta_recurso("logo.png")
+        if os.path.exists(ruta_logo_png):
+            logo_img = ctk.CTkImage(light_image=Image.open(ruta_logo_png), dark_image=Image.open(ruta_logo_png), size=(100, 100))
+            self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="", image=logo_img)
+        else:
+            self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="DowVideo", font=ctk.CTkFont(size=22, weight="bold"), text_color="#ffffff")
+            
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 30))
 
         self.btn_descargas = ctk.CTkButton(self.sidebar_frame, text="Descargas", fg_color="transparent", text_color="#ffffff", hover_color="#2196f3", anchor="w", font=ctk.CTkFont(size=14), command=self.show_descargas)
@@ -335,13 +342,15 @@ class DowVideoApp(ctk.CTk):
         except Exception as e:
             print("Error procesando miniatura:", e)
 
-    def obtener_ruta_ffmpeg(self):
+    def obtener_ruta_recurso(self, nombre_archivo):
         if getattr(sys, 'frozen', False):
             base_path = sys._MEIPASS
         else:
             base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            
-        ruta_bin = os.path.join(base_path, 'bin')
+        return os.path.join(base_path, nombre_archivo)
+
+    def obtener_ruta_ffmpeg(self):
+        ruta_bin = self.obtener_ruta_recurso('bin')
         if os.path.exists(os.path.join(ruta_bin, 'ffmpeg.exe')):
             return ruta_bin
         return None

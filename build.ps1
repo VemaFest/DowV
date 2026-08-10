@@ -10,13 +10,21 @@ if (Test-Path "bin\ffmpeg.exe") {
     Write-Host "AVISO: No se detectó FFmpeg local. La app requerirá que esté instalado en la PC de destino." -ForegroundColor Yellow
 }
 
+$dataArgs = ""
+if (Test-Path "logo.png") {
+    $dataArgs += " --add-data `"logo.png;.`""
+}
 if (Test-Path "logo.ico") {
-    Write-Host "¡Se encontró logo.ico! Se agregará al .exe" -ForegroundColor Green
-    Invoke-Expression "pyinstaller --noconfirm --noconsole --onedir --name `"DowVideo`" --icon `"logo.ico`" --collect-all customtkinter --collect-all plyer $binArgs main.py"
+    $dataArgs += " --add-data `"logo.ico;.`""
+}
+
+if (Test-Path "logo.ico") {
+    Write-Host "¡Se encontró logo.ico! Se agregará al .exe y a la ventana" -ForegroundColor Green
+    Invoke-Expression "pyinstaller --noconfirm --noconsole --onedir --name `"DowVideo`" --icon `"logo.ico`" $dataArgs --collect-all customtkinter --collect-all plyer $binArgs main.py"
 } else {
     Write-Host "No se encontró logo.ico. Se compilará con el ícono por defecto." -ForegroundColor Yellow
     Write-Host "(Nota: Si quieres tu propio ícono, pon una imagen llamada 'logo.ico' aquí y vuelve a correr este script)" -ForegroundColor Gray
-    Invoke-Expression "pyinstaller --noconfirm --noconsole --onedir --name `"DowVideo`" --collect-all customtkinter --collect-all plyer $binArgs main.py"
+    Invoke-Expression "pyinstaller --noconfirm --noconsole --onedir --name `"DowVideo`" $dataArgs --collect-all customtkinter --collect-all plyer $binArgs main.py"
 }
 
 Write-Host "=============================================" -ForegroundColor Green
