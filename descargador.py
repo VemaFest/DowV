@@ -5,6 +5,9 @@ import threading
 import os
 import json
 import re
+import requests
+from io import BytesIO
+from PIL import Image, ImageTk
 
 CONFIG_FILE = "config.json"
 
@@ -102,11 +105,23 @@ def buscar_calidades_hilo():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             
+            thumb_url = info.get('thumbnail')
+            
             if 'entries' in info:
                 entradas = list(info['entries'])
                 formatos = entradas[0].get('formats', []) if entradas and entradas[0] else []
+                if not thumb_url and entradas and entradas[0]:
+                    thumb_url = entradas[0].get('thumbnail')
             else:
                 formatos = info.get('formats', [])
+                
+            if thumb_url:
+                try:
+                    res = requests.get(thumb_url, timeout=5)
+                    img_data = res.content
+                    ventana.after(0, lambda d=img_data: mostrar_miniatura(d))
+                except Exception as e:
+                    print("Error descargando miniatura:", e)
             
             formatos_disponibles['video'] = []
             formatos_disponibles['audio'] = []
@@ -143,6 +158,7 @@ def on_url_change(event=None):
     global id_after_busqueda
     if id_after_busqueda:
         ventana.after_cancel(id_after_busqueda)
+    etiqueta_imagen.config(image='')
     id_after_busqueda = ventana.after(800, iniciar_busqueda)
 
 def actualizar_combobox(*args):
@@ -172,6 +188,16 @@ def limpiar_temporales(directorio):
                 os.remove(os.path.join(directorio, archivo))
             except:
                 pass
+
+def mostrar_miniatura(img_data):
+    try:
+        img = Image.open(BytesIO(img_data))
+        img = img.resize((160, 90), Image.Resampling.LANCZOS)
+        foto = ImageTk.PhotoImage(img)
+        etiqueta_imagen.config(image=foto)
+        etiqueta_imagen.image = foto
+    except Exception as e:
+        print("Error procesando miniatura:", e)
 
 def actualizar_progreso_ui(percent_float, percent_str, speed, eta):
     barra_progreso['value'] = percent_float
@@ -320,7 +346,7 @@ inicializar_configuracion()
 
 ventana = tk.Tk()
 ventana.title("Descargador de YouTube")
-ventana.geometry("450x480")
+ventana.geometry("450x580")
 
 tk.Label(ventana, text="Enlaces de YouTube (uno por línea):", font=("Arial", 10)).pack(pady=5)
 
@@ -328,6 +354,9 @@ entrada_url = tk.Text(ventana, width=50, height=5)
 entrada_url.pack(pady=5)
 entrada_url.bind("<KeyRelease>", on_url_change)
 entrada_url.bind("<<Paste>>", lambda e: ventana.after(10, on_url_change))
+
+etiqueta_imagen = tk.Label(ventana)
+etiqueta_imagen.pack(pady=5)
 
 carpeta_destino = tk.StringVar()
 
