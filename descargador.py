@@ -10,6 +10,7 @@ from io import BytesIO
 from PIL import Image, ImageTk
 from datetime import datetime
 import subprocess
+from plyer import notification
 
 CONFIG_FILE = "config.json"
 HISTORIAL_FILE = "historial.json"
@@ -359,6 +360,15 @@ def descargar():
                     
         etiqueta_estado.config(text="¡Descarga completada con éxito!", fg="green")
         ventana.after(0, lambda: etiqueta_stats.config(text="¡Listo!"))
+        try:
+            notification.notify(
+                title="DowV - Éxito",
+                message="¡La descarga se ha completado con éxito!",
+                app_name="DowVideo",
+                timeout=5
+            )
+        except Exception:
+            pass
     except Exception as e:
         if str(e) == "Descarga_Cancelada":
             etiqueta_estado.config(text="Descarga cancelada por el usuario.", fg="red")
@@ -377,6 +387,15 @@ def descargar():
         else:
             etiqueta_estado.config(text="Hubo un error al descargar.", fg="red")
             print(e)
+            try:
+                notification.notify(
+                    title="DowV - Error",
+                    message="Ocurrió un problema al descargar el medio.",
+                    app_name="DowVideo",
+                    timeout=5
+                )
+            except Exception:
+                pass
     finally:
         limpiar_temporales(destino)
         boton_descargar.config(state=tk.NORMAL)
