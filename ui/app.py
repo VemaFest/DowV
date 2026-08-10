@@ -23,12 +23,32 @@ class DowVideoApp(ctk.CTk):
         
         # Setup window
         self.title("DowV - Descargador de YouTube")
-        self.geometry("750x650") # Un poco mas ancho para el Sidebar + Grid
-        self.minsize(700, 600)
+        self.geometry("800x650") # Ajustado para Sidebar más ancho
+        self.minsize(750, 600)
+        
+        # ID para Windows Taskbar Icon
+        import platform
+        if platform.system() == 'Windows':
+            import ctypes
+            try:
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('vemafest.dowv.app.1.0')
+            except Exception:
+                pass
         
         ruta_icono = self.obtener_ruta_recurso("logo.ico")
         if os.path.exists(ruta_icono):
-            self.iconbitmap(ruta_icono)
+            try:
+                self.iconbitmap(ruta_icono)
+            except Exception:
+                pass
+        
+        ruta_logo_png = self.obtener_ruta_recurso("logo.png")
+        if os.path.exists(ruta_logo_png):
+            try:
+                icon_img = ImageTk.PhotoImage(Image.open(ruta_logo_png))
+                self.wm_iconphoto(True, icon_img)
+            except Exception:
+                pass
 
         # Configurar y inicializar dependencias
         inicializar_configuracion()
@@ -49,13 +69,13 @@ class DowVideoApp(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
 
         # ====== SIDEBAR ======
-        self.sidebar_frame = ctk.CTkFrame(self, width=150, corner_radius=0, fg_color="#0d47a1")
+        self.sidebar_frame = ctk.CTkFrame(self, width=180, corner_radius=0, fg_color="#0d47a1")
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(4, weight=1)
         
         ruta_logo_png = self.obtener_ruta_recurso("logo.png")
         if os.path.exists(ruta_logo_png):
-            logo_img = ctk.CTkImage(light_image=Image.open(ruta_logo_png), dark_image=Image.open(ruta_logo_png), size=(100, 100))
+            logo_img = ctk.CTkImage(light_image=Image.open(ruta_logo_png), dark_image=Image.open(ruta_logo_png), size=(150, 150))
             self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="", image=logo_img)
         else:
             self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="DowVideo", font=ctk.CTkFont(size=22, weight="bold"), text_color="#ffffff")
