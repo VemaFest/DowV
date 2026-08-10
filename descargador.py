@@ -12,6 +12,7 @@ from datetime import datetime
 import subprocess
 from plyer import notification
 import logging
+import winreg
 
 LOG_FILE = "dowv_auditoria.log"
 logging.basicConfig(
@@ -63,6 +64,56 @@ def limpiar_todo_historial():
     if messagebox.askyesno("Confirmar", "¿Seguro que deseas borrar todo el historial?"):
         guardar_historial([])
         refrescar_historial_ui()
+
+def obtener_navegador_por_defecto():
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice')
+        prog_id, _ = winreg.QueryValueEx(key, 'ProgId')
+        prog_id = prog_id.lower()
+        
+        if 'chrome' in prog_id:
+            return 'chrome'
+        elif 'edge' in prog_id:
+            return 'edge'
+        elif 'firefox' in prog_id:
+            return 'firefox'
+        elif 'brave' in prog_id:
+            return 'brave'
+        elif 'opera' in prog_id:
+            return 'opera'
+        elif 'vivaldi' in prog_id:
+            return 'vivaldi'
+        else:
+            return None
+    except Exception:
+        return None
+
+def extraer_info_robusto(ydl_opts_base, url, download=True):
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts_base) as ydl:
+            return ydl.extract_info(url, download=download)
+    except Exception as e:
+        error_msg = str(e).lower()
+        necesita_cookies = any(kw in error_msg for kw in ['sign in', 'bot', '429', 'too many requests', 'cookie'])
+        if necesita_cookies:
+            logging.info("YouTube bloqueó la descarga. Intentando evasión con cookies locales...")
+            navegadores = ['chrome', 'edge', 'firefox', 'brave', 'opera', 'vivaldi']
+            def_nav = obtener_navegador_por_defecto()
+            if def_nav and def_nav in navegadores:
+                navegadores.remove(def_nav)
+                navegadores.insert(0, def_nav)
+                
+            for nav in navegadores:
+                logging.info(f"Probando extraer cookies de: {nav}")
+                opts = dict(ydl_opts_base)
+                opts['cookiesfrombrowser'] = (nav,)
+                try:
+                    with yt_dlp.YoutubeDL(opts) as ydl2:
+                        return ydl2.extract_info(url, download=download)
+                except Exception as ex:
+                    logging.warning(f"Fallo al usar cookies de {nav}")
+                    continue
+        raise e
 
 def cargar_config():
     if os.path.exists(CONFIG_FILE):
@@ -155,51 +206,51 @@ def buscar_calidades_hilo():
         'playlist_items': '1',
         'logger': YTDLLogger(),
     }
+        
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+        info = extraer_info_robusto(ydl_opts, url, download=False)
+        
+        thumb_url = info.get('thumbnail')
+        
+        if 'entries' in info:
+            entradas = list(info['entries'])
+            formatos = entradas[0].get('formats', []) if entradas and entradas[0] else []
+            if not thumb_url and entradas and entradas[0]:
+                thumb_url = entradas[0].get('thumbnail')
+        else:
+            formatos = info.get('formats', [])
             
-            thumb_url = info.get('thumbnail')
+        if thumb_url:
+            try:
+                res = requests.get(thumb_url, timeout=5)
+                img_data = res.content
+                ventana.after(0, lambda d=img_data: mostrar_miniatura(d))
+            except Exception as e:
+                print("Error descargando miniatura:", e)
+        
+        formatos_disponibles['video'] = []
+        formatos_disponibles['audio'] = []
+        
+        resoluciones = []
+        for f in formatos:
+            if f.get('vcodec') != 'none':
+                res = f.get('height', 0)
+                if res and res not in resoluciones:
+                    resoluciones.append(res)
+                    
+            if f.get('acodec') != 'none' and f.get('vcodec') == 'none':
+                abr = f.get('abr', 0)
+                if abr and abr not in [a['abr'] for a in formatos_disponibles['audio']]:
+                    formatos_disponibles['audio'].append({'abr': abr, 'format_id': f['format_id']})
+        
+        resoluciones.sort(reverse=True)
+        for r in resoluciones:
+            formatos_disponibles['video'].append(f"{r}p")
             
-            if 'entries' in info:
-                entradas = list(info['entries'])
-                formatos = entradas[0].get('formats', []) if entradas and entradas[0] else []
-                if not thumb_url and entradas and entradas[0]:
-                    thumb_url = entradas[0].get('thumbnail')
-            else:
-                formatos = info.get('formats', [])
-                
-            if thumb_url:
-                try:
-                    res = requests.get(thumb_url, timeout=5)
-                    img_data = res.content
-                    ventana.after(0, lambda d=img_data: mostrar_miniatura(d))
-                except Exception as e:
-                    print("Error descargando miniatura:", e)
-            
-            formatos_disponibles['video'] = []
-            formatos_disponibles['audio'] = []
-            
-            resoluciones = []
-            for f in formatos:
-                if f.get('vcodec') != 'none':
-                    res = f.get('height', 0)
-                    if res and res not in resoluciones:
-                        resoluciones.append(res)
-                        
-                if f.get('acodec') != 'none' and f.get('vcodec') == 'none':
-                    abr = f.get('abr', 0)
-                    if abr and abr not in [a['abr'] for a in formatos_disponibles['audio']]:
-                        formatos_disponibles['audio'].append({'abr': abr, 'format_id': f['format_id']})
-            
-            resoluciones.sort(reverse=True)
-            for r in resoluciones:
-                formatos_disponibles['video'].append(f"{r}p")
-                
-            formatos_disponibles['audio'].sort(key=lambda x: x['abr'], reverse=True)
-            
-            ventana.after(0, actualizar_combobox)
-            ventana.after(0, lambda: etiqueta_estado.config(text="¡Calidades encontradas!", fg="green"))
+        formatos_disponibles['audio'].sort(key=lambda x: x['abr'], reverse=True)
+        
+        ventana.after(0, actualizar_combobox)
+        ventana.after(0, lambda: etiqueta_estado.config(text="¡Calidades encontradas!", fg="green"))
     except Exception as e:
         ventana.after(0, lambda: etiqueta_estado.config(text="Error al buscar calidades.", fg="red"))
         print(e)
@@ -319,15 +370,15 @@ def descargar():
         ydl_opts_flat = {
             'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'extract_flat': True,
+            'logger': YTDLLogger(),
         }
         videos_lista = []
         try:
-            with yt_dlp.YoutubeDL(ydl_opts_flat) as ydl:
-                info = ydl.extract_info(urls[0], download=False)
-                if 'entries' in info:
-                    for i, entry in enumerate(info['entries']):
-                        if entry:
-                            videos_lista.append({'index': i+1, 'title': entry.get('title', f'Video {i+1}')})
+            info = extraer_info_robusto(ydl_opts_flat, urls[0], download=False)
+            if 'entries' in info:
+                for i, entry in enumerate(info['entries']):
+                    if entry:
+                        videos_lista.append({'index': i+1, 'title': entry.get('title', f'Video {i+1}')})
         except Exception:
             pass
             
@@ -478,30 +529,30 @@ def descargar():
         })
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            for url in urls:
-                info = ydl.extract_info(url, download=True)
+        for url in urls:
+            info = extraer_info_robusto(ydl_opts, url, download=True)
+            
+            entradas = info.get('entries') if 'entries' in info else [info]
+            for entry in entradas:
+                if not entry: continue
+                titulo = entry.get('title', 'Video Desconocido')
+                calidad_str = f"{opcion_var.get().upper()} - {combo_calidad.get()}"
                 
-                entradas = info.get('entries') if 'entries' in info else [info]
-                for entry in entradas:
-                    if not entry: continue
-                    titulo = entry.get('title', 'Video Desconocido')
-                    calidad_str = f"{opcion_var.get().upper()} - {combo_calidad.get()}"
+                logging.info(f"Atributos del Video Procesado:")
+                logging.info(f" - Título: {titulo}")
+                logging.info(f" - ID: {entry.get('id', 'N/A')}")
+                logging.info(f" - Duración: {entry.get('duration', 'N/A')} seg")
+                logging.info(f" - Calidad seleccionada: {calidad_str}")
+                
+                ruta_final = ""
+                req_dl = entry.get('requested_downloads', [])
+                if req_dl:
+                    ruta_final = req_dl[0].get('filepath', '')
+                else:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl_dummy:
+                        ruta_final = ydl_dummy.prepare_filename(entry)
                     
-                    logging.info(f"Atributos del Video Procesado:")
-                    logging.info(f" - Título: {titulo}")
-                    logging.info(f" - ID: {entry.get('id', 'N/A')}")
-                    logging.info(f" - Duración: {entry.get('duration', 'N/A')} seg")
-                    logging.info(f" - Calidad seleccionada: {calidad_str}")
-                    
-                    ruta_final = ""
-                    req_dl = entry.get('requested_downloads', [])
-                    if req_dl:
-                        ruta_final = req_dl[0].get('filepath', '')
-                    else:
-                        ruta_final = ydl.prepare_filename(entry)
-                        
-                    agregar_a_historial(titulo, calidad_str, ruta_final)
+                agregar_a_historial(titulo, calidad_str, ruta_final)
                     
         etiqueta_estado.config(text="¡Descarga completada con éxito!", fg="green")
         ventana.after(0, lambda: etiqueta_stats.config(text="¡Listo!"))
