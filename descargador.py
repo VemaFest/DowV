@@ -11,6 +11,29 @@ from PIL import Image, ImageTk
 from datetime import datetime
 import subprocess
 from plyer import notification
+import logging
+
+LOG_FILE = "dowv_auditoria.log"
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    encoding='utf-8'
+)
+
+class YTDLLogger:
+    def debug(self, msg):
+        if msg.startswith('[download]'):
+            logging.info(msg)
+        else:
+            logging.debug(msg)
+    def info(self, msg):
+        logging.info(msg)
+    def warning(self, msg):
+        logging.warning(msg)
+    def error(self, msg):
+        logging.error(msg)
+
 
 CONFIG_FILE = "config.json"
 HISTORIAL_FILE = "historial.json"
@@ -35,6 +58,11 @@ def agregar_a_historial(titulo, calidad, ruta):
     historial = historial[:50]
     guardar_historial(historial)
     ventana.after(0, refrescar_historial_ui)
+
+def limpiar_todo_historial():
+    if messagebox.askyesno("Confirmar", "¿Seguro que deseas borrar todo el historial?"):
+        guardar_historial([])
+        refrescar_historial_ui()
 
 def cargar_config():
     if os.path.exists(CONFIG_FILE):
@@ -125,6 +153,7 @@ def buscar_calidades_hilo():
     ydl_opts = {
         'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         'playlist_items': '1',
+        'logger': YTDLLogger(),
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -313,7 +342,13 @@ def descargar():
                 popup.transient(ventana)
                 popup.grab_set()
                 
-                tk.Label(popup, text=f"Se detectó una lista de {len(videos_lista)} videos.\nSelecciona cuáles deseas descargar:", font=("Arial", 10, "bold")).pack(pady=10)
+                tk.Label(popup, text=f"Se detectó una lista de {len(videos_lista)} videos.\nSelecciona cuáles deseas descargar:", font=("Arial", 10, "bold")).pack(pady=5)
+                
+                marco_busqueda_popup = tk.Frame(popup)
+                marco_busqueda_popup.pack(fill=tk.X, padx=10, pady=2)
+                tk.Label(marco_busqueda_popup, text="Buscar:").pack(side=tk.LEFT)
+                entrada_busqueda_popup = tk.Entry(marco_busqueda_popup)
+                entrada_busqueda_popup.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
                 
                 marco_scroll = ttk.Frame(popup)
                 marco_scroll.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
@@ -333,11 +368,25 @@ def descargar():
                 scrollbar.pack(side="right", fill="y")
                 
                 vars_check = {}
+                checkbuttons_refs = {}
                 for v in videos_lista:
                     var = tk.BooleanVar(value=True)
                     vars_check[v['index']] = var
                     cb = tk.Checkbutton(scrollable_frame, text=v['title'], variable=var, wraplength=350, justify="left")
                     cb.pack(anchor="w", pady=2)
+                    checkbuttons_refs[v['index']] = {'cb': cb, 'title': v['title'].lower()}
+                    
+                def filtrar_popup(event):
+                    busqueda = entrada_busqueda_popup.get().lower()
+                    for v in videos_lista:
+                        idx = v['index']
+                        ref = checkbuttons_refs[idx]
+                        if busqueda in ref['title']:
+                            ref['cb'].pack(anchor="w", pady=2)
+                        else:
+                            ref['cb'].pack_forget()
+                            
+                entrada_busqueda_popup.bind('<KeyRelease>', filtrar_popup)
                     
                 def confirmar():
                     for idx, var in vars_check.items():
@@ -379,7 +428,11 @@ def descargar():
         'progress_hooks': [progress_hook],
         'postprocessor_hooks': [postprocessor_hook],
         'nooverwrites': True,
+        'logger': YTDLLogger(),
     }
+    
+    logging.info("--- INICIO DE NUEVA SESIÓN DE DESCARGA ---")
+    logging.info(f"URLs solicitadas: {urls}")
     
     if playlist_items_str:
         ydl_opts['playlist_items'] = playlist_items_str
@@ -435,6 +488,12 @@ def descargar():
                     titulo = entry.get('title', 'Video Desconocido')
                     calidad_str = f"{opcion_var.get().upper()} - {combo_calidad.get()}"
                     
+                    logging.info(f"Atributos del Video Procesado:")
+                    logging.info(f" - Título: {titulo}")
+                    logging.info(f" - ID: {entry.get('id', 'N/A')}")
+                    logging.info(f" - Duración: {entry.get('duration', 'N/A')} seg")
+                    logging.info(f" - Calidad seleccionada: {calidad_str}")
+                    
                     ruta_final = ""
                     req_dl = entry.get('requested_downloads', [])
                     if req_dl:
@@ -446,6 +505,7 @@ def descargar():
                     
         etiqueta_estado.config(text="¡Descarga completada con éxito!", fg="green")
         ventana.after(0, lambda: etiqueta_stats.config(text="¡Listo!"))
+        logging.info("--- SESIÓN DE DESCARGA COMPLETADA CON ÉXITO ---")
         try:
             notification.notify(
                 title="DowV - Éxito",
@@ -472,6 +532,8 @@ def descargar():
                     pass
         else:
             etiqueta_estado.config(text="Hubo un error al descargar.", fg="red")
+            logging.error(f"!!! ERROR FATAL DURANTE LA DESCARGA !!!\nDetalles: {str(e)}")
+            ventana.after(0, lambda err=str(e): messagebox.showerror("Error de Descarga", f"Se produjo un error durante la descarga:\n\n{err}\n\nRevisa el archivo dowv_auditoria.log para más detalles."))
             print(e)
             try:
                 notification.notify(
@@ -557,6 +619,16 @@ etiqueta_stats = tk.Label(tab_descargas, text="", font=("Arial", 8), fg="gray")
 etiqueta_stats.pack(pady=2)
 
 # --- Tab Historial ---
+marco_herramientas_historial = tk.Frame(tab_historial)
+marco_herramientas_historial.pack(fill=tk.X, padx=5, pady=5)
+
+tk.Label(marco_herramientas_historial, text="Buscar:").pack(side=tk.LEFT)
+entrada_busqueda_historial = tk.Entry(marco_herramientas_historial, width=30)
+entrada_busqueda_historial.pack(side=tk.LEFT, padx=5)
+
+boton_limpiar_historial = tk.Button(marco_herramientas_historial, text="Limpiar Historial", command=limpiar_todo_historial, bg="#ff4d4d", fg="white")
+boton_limpiar_historial.pack(side=tk.RIGHT, padx=5)
+
 columnas = ('titulo', 'calidad', 'fecha', 'ruta')
 arbol_historial = ttk.Treeview(tab_historial, columns=columnas, show='headings')
 arbol_historial.heading('titulo', text='Título')
@@ -577,11 +649,15 @@ arbol_historial.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
 tk.Label(tab_historial, text="Doble clic en un elemento para abrir su ubicación.", font=("Arial", 8), fg="gray").pack(pady=2)
 
-def refrescar_historial_ui():
+def refrescar_historial_ui(event=None):
+    busqueda = entrada_busqueda_historial.get().lower()
     for item in arbol_historial.get_children():
         arbol_historial.delete(item)
     for item in cargar_historial():
-        arbol_historial.insert('', tk.END, values=(item['titulo'], item['calidad'], item['fecha'], item['ruta']))
+        if busqueda in item['titulo'].lower() or busqueda in item['calidad'].lower():
+            arbol_historial.insert('', tk.END, values=(item['titulo'], item['calidad'], item['fecha'], item['ruta']))
+
+entrada_busqueda_historial.bind('<KeyRelease>', refrescar_historial_ui)
 
 def abrir_ruta_historial(event):
     seleccion = arbol_historial.selection()
