@@ -19,12 +19,18 @@ def guardar_config(ruta):
 
 formatos_disponibles = {'video': [], 'audio': []}
 
+cancelar_descarga_flag = False
+archivos_sesion = set()
+
 def obtener_ruta_defecto(tipo):
     perfil = os.environ.get('USERPROFILE', os.path.expanduser('~'))
     if tipo == "video":
-        return os.path.join(perfil, 'Videos')
+        ruta = os.path.join(perfil, 'Videos', 'DowV')
     else:
-        return os.path.join(perfil, 'Music')
+        ruta = os.path.join(perfil, 'Music', 'DowV')
+    
+    os.makedirs(ruta, exist_ok=True)
+    return ruta
 
 def actualizar_carpeta_ui(*args):
     tipo = opcion_var.get()
@@ -33,7 +39,11 @@ def actualizar_carpeta_ui(*args):
     ruta_video = obtener_ruta_defecto("video")
     ruta_audio = obtener_ruta_defecto("audio")
     
-    if not ruta_actual or ruta_actual == ruta_video or ruta_actual == ruta_audio:
+    perfil = os.environ.get('USERPROFILE', os.path.expanduser('~'))
+    old_video = os.path.join(perfil, 'Videos')
+    old_audio = os.path.join(perfil, 'Music')
+    
+    if not ruta_actual or ruta_actual in (ruta_video, ruta_audio, old_video, old_audio):
         nueva_ruta = obtener_ruta_defecto(tipo)
         carpeta_destino.set(nueva_ruta)
         etiqueta_carpeta.config(text=f"Carpeta: {nueva_ruta}")
@@ -48,20 +58,32 @@ def seleccionar_carpeta():
         etiqueta_carpeta.config(text=f"Carpeta: {carpeta}")
         guardar_config(carpeta)
 
+def obtener_urls():
+    texto = entrada_url.get("1.0", tk.END).strip()
+    return [linea.strip() for linea in texto.split('\n') if linea.strip().startswith('http')]
+
 def buscar_calidades_hilo():
-    url = var_url.get().strip()
-    if not url.startswith("http"):
+    urls = obtener_urls()
+    if not urls:
         return
+    
+    url = urls[0]
     
     etiqueta_estado.config(text="Buscando calidades automáticamente...", fg="blue")
     
     ydl_opts = {
         'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'playlist_items': '1',
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            formatos = info.get('formats', [])
+            
+            if 'entries' in info:
+                entradas = list(info['entries'])
+                formatos = entradas[0].get('formats', []) if entradas and entradas[0] else []
+            else:
+                formatos = info.get('formats', [])
             
             formatos_disponibles['video'] = []
             formatos_disponibles['audio'] = []
@@ -94,7 +116,7 @@ def iniciar_busqueda():
     threading.Thread(target=buscar_calidades_hilo, daemon=True).start()
 
 id_after_busqueda = None
-def on_url_change(*args):
+def on_url_change(event=None):
     global id_after_busqueda
     if id_after_busqueda:
         ventana.after_cancel(id_after_busqueda)
@@ -112,18 +134,38 @@ def actualizar_combobox(*args):
     if opciones:
         combo_calidad.current(0)
 
+def cancelar_descarga():
+    global cancelar_descarga_flag
+    cancelar_descarga_flag = True
+    etiqueta_estado.config(text="Cancelando... por favor espere.", fg="red")
+    boton_cancelar.config(state=tk.DISABLED)
+
+def progress_hook(d):
+    global cancelar_descarga_flag
+    if cancelar_descarga_flag:
+        raise Exception("Descarga_Cancelada")
+    
+    if d['status'] in ('downloading', 'finished'):
+        if 'filename' in d:
+            archivos_sesion.add(d['filename'])
+
 def iniciar_descarga():
     # Usamos un hilo para que la ventana no diga "No responde" mientras descarga
     hilo = threading.Thread(target=descargar, daemon=True)
     hilo.start()
 
 def descargar():
-    url = var_url.get().strip()
-    if not url:
-        messagebox.showwarning("Falta el enlace", "¡Mae, ponga un enlace de YouTube primero!")
+    global cancelar_descarga_flag, archivos_sesion
+    cancelar_descarga_flag = False
+    archivos_sesion.clear()
+    
+    urls = obtener_urls()
+    if not urls:
+        messagebox.showwarning("Falta el enlace", "¡Mae, ponga al menos un enlace de YouTube primero!")
         return
 
     boton_descargar.config(state=tk.DISABLED)
+    boton_cancelar.config(state=tk.NORMAL)
     etiqueta_estado.config(text="Descargando... ¡dele un toque!", fg="blue")
     
     formato = opcion_var.get()
@@ -132,6 +174,7 @@ def descargar():
     ydl_opts = {
         'outtmpl': '%(title)s.%(ext)s', 
         'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'progress_hooks': [progress_hook],
     }
 
     destino = carpeta_destino.get()
@@ -172,25 +215,39 @@ def descargar():
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+            ydl.download(urls)
         etiqueta_estado.config(text="¡Descarga completada con éxito!", fg="green")
     except Exception as e:
-        etiqueta_estado.config(text="Hubo un error al descargar.", fg="red")
-        print(e)
+        if str(e) == "Descarga_Cancelada":
+            etiqueta_estado.config(text="Descarga cancelada por el usuario.", fg="red")
+            for archivo in archivos_sesion:
+                try:
+                    if os.path.exists(archivo):
+                        os.remove(archivo)
+                    if os.path.exists(archivo + '.part'):
+                        os.remove(archivo + '.part')
+                    if os.path.exists(archivo + '.ytdl'):
+                        os.remove(archivo + '.ytdl')
+                except:
+                    pass
+        else:
+            etiqueta_estado.config(text="Hubo un error al descargar.", fg="red")
+            print(e)
     finally:
         boton_descargar.config(state=tk.NORMAL)
+        boton_cancelar.config(state=tk.DISABLED)
 
 # --- Diseño de la Ventanita ---
 ventana = tk.Tk()
 ventana.title("Descargador de YouTube")
-ventana.geometry("450x420")
+ventana.geometry("450x480")
 
-tk.Label(ventana, text="Enlace de YouTube:", font=("Arial", 10)).pack(pady=5)
+tk.Label(ventana, text="Enlaces de YouTube (uno por línea):", font=("Arial", 10)).pack(pady=5)
 
-var_url = tk.StringVar()
-var_url.trace_add('write', on_url_change)
-entrada_url = tk.Entry(ventana, width=50, textvariable=var_url)
+entrada_url = tk.Text(ventana, width=50, height=5)
 entrada_url.pack(pady=5)
+entrada_url.bind("<KeyRelease>", on_url_change)
+entrada_url.bind("<<Paste>>", lambda e: ventana.after(10, on_url_change))
 
 carpeta_destino = tk.StringVar()
 config_data = cargar_config()
@@ -220,8 +277,14 @@ combo_calidad = ttk.Combobox(ventana, state="readonly", width=30)
 combo_calidad.pack(pady=5)
 combo_calidad.set("Busca un video primero")
 
-boton_descargar = tk.Button(ventana, text="¡Descargar!", command=iniciar_descarga, bg="#d90429", fg="white", font=("Arial", 10, "bold"))
-boton_descargar.pack(pady=15)
+marco_botones = tk.Frame(ventana)
+marco_botones.pack(pady=15)
+
+boton_descargar = tk.Button(marco_botones, text="¡Descargar!", command=iniciar_descarga, bg="#d90429", fg="white", font=("Arial", 10, "bold"))
+boton_descargar.pack(side=tk.LEFT, padx=5)
+
+boton_cancelar = tk.Button(marco_botones, text="Cancelar", command=cancelar_descarga, bg="#8d99ae", fg="white", font=("Arial", 10, "bold"), state=tk.DISABLED)
+boton_cancelar.pack(side=tk.LEFT, padx=5)
 
 etiqueta_estado = tk.Label(ventana, text="", font=("Arial", 9, "bold"))
 etiqueta_estado.pack(pady=5)
