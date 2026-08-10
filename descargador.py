@@ -8,8 +8,32 @@ import re
 import requests
 from io import BytesIO
 from PIL import Image, ImageTk
+from datetime import datetime
+import subprocess
 
 CONFIG_FILE = "config.json"
+HISTORIAL_FILE = "historial.json"
+
+def cargar_historial():
+    if os.path.exists(HISTORIAL_FILE):
+        try:
+            with open(HISTORIAL_FILE, 'r') as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def guardar_historial(datos):
+    with open(HISTORIAL_FILE, 'w') as f:
+        json.dump(datos, f, indent=4)
+
+def agregar_a_historial(titulo, calidad, ruta):
+    historial = cargar_historial()
+    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    historial.insert(0, {"titulo": titulo, "calidad": calidad, "fecha": fecha, "ruta": ruta})
+    historial = historial[:50]
+    guardar_historial(historial)
+    ventana.after(0, refrescar_historial_ui)
 
 def cargar_config():
     if os.path.exists(CONFIG_FILE):
@@ -315,7 +339,24 @@ def descargar():
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download(urls)
+            for url in urls:
+                info = ydl.extract_info(url, download=True)
+                
+                entradas = info.get('entries') if 'entries' in info else [info]
+                for entry in entradas:
+                    if not entry: continue
+                    titulo = entry.get('title', 'Video Desconocido')
+                    calidad_str = f"{opcion_var.get().upper()} - {combo_calidad.get()}"
+                    
+                    ruta_final = ""
+                    req_dl = entry.get('requested_downloads', [])
+                    if req_dl:
+                        ruta_final = req_dl[0].get('filepath', '')
+                    else:
+                        ruta_final = ydl.prepare_filename(entry)
+                        
+                    agregar_a_historial(titulo, calidad_str, ruta_final)
+                    
         etiqueta_estado.config(text="¡Descarga completada con éxito!", fg="green")
         ventana.after(0, lambda: etiqueta_stats.config(text="¡Listo!"))
     except Exception as e:
@@ -346,24 +387,34 @@ inicializar_configuracion()
 
 ventana = tk.Tk()
 ventana.title("Descargador de YouTube")
-ventana.geometry("450x580")
+ventana.geometry("500x600")
 
-tk.Label(ventana, text="Enlaces de YouTube (uno por línea):", font=("Arial", 10)).pack(pady=5)
+notebook = ttk.Notebook(ventana)
+notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-entrada_url = tk.Text(ventana, width=50, height=5)
+tab_descargas = ttk.Frame(notebook)
+notebook.add(tab_descargas, text="Descargas")
+
+tab_historial = ttk.Frame(notebook)
+notebook.add(tab_historial, text="Historial")
+
+# --- Tab Descargas ---
+tk.Label(tab_descargas, text="Enlaces de YouTube (uno por línea):", font=("Arial", 10)).pack(pady=5)
+
+entrada_url = tk.Text(tab_descargas, width=55, height=4)
 entrada_url.pack(pady=5)
 entrada_url.bind("<KeyRelease>", on_url_change)
 entrada_url.bind("<<Paste>>", lambda e: ventana.after(10, on_url_change))
 
-etiqueta_imagen = tk.Label(ventana)
+etiqueta_imagen = tk.Label(tab_descargas)
 etiqueta_imagen.pack(pady=5)
 
 carpeta_destino = tk.StringVar()
 
-boton_carpeta = tk.Button(ventana, text="Elegir dónde guardar", command=seleccionar_carpeta)
+boton_carpeta = tk.Button(tab_descargas, text="Elegir dónde guardar", command=seleccionar_carpeta)
 boton_carpeta.pack(pady=5)
 
-etiqueta_carpeta = tk.Label(ventana, text="", font=("Arial", 8), fg="gray")
+etiqueta_carpeta = tk.Label(tab_descargas, text="", font=("Arial", 8), fg="gray")
 etiqueta_carpeta.pack(pady=2)
 
 opcion_var = tk.StringVar(value="video")
@@ -371,19 +422,19 @@ opcion_var.trace_add('write', actualizar_combobox)
 opcion_var.trace_add('write', actualizar_carpeta_ui)
 actualizar_carpeta_ui()
 
-marco_opciones = tk.Frame(ventana)
+marco_opciones = tk.Frame(tab_descargas)
 marco_opciones.pack(pady=5)
 
 tk.Radiobutton(marco_opciones, text="Video (MP4)", variable=opcion_var, value="video").pack(side=tk.LEFT, padx=10)
 tk.Radiobutton(marco_opciones, text="Audio (MP3)", variable=opcion_var, value="audio").pack(side=tk.LEFT, padx=10)
 
-tk.Label(ventana, text="Calidad:", font=("Arial", 10)).pack(pady=2)
-combo_calidad = ttk.Combobox(ventana, state="readonly", width=30)
+tk.Label(tab_descargas, text="Calidad:", font=("Arial", 10)).pack(pady=2)
+combo_calidad = ttk.Combobox(tab_descargas, state="readonly", width=30)
 combo_calidad.pack(pady=5)
 combo_calidad.set("Busca un video primero")
 
-marco_botones = tk.Frame(ventana)
-marco_botones.pack(pady=15)
+marco_botones = tk.Frame(tab_descargas)
+marco_botones.pack(pady=10)
 
 boton_descargar = tk.Button(marco_botones, text="¡Descargar!", command=iniciar_descarga, bg="#d90429", fg="white", font=("Arial", 10, "bold"))
 boton_descargar.pack(side=tk.LEFT, padx=5)
@@ -391,13 +442,59 @@ boton_descargar.pack(side=tk.LEFT, padx=5)
 boton_cancelar = tk.Button(marco_botones, text="Cancelar", command=cancelar_descarga, bg="#8d99ae", fg="white", font=("Arial", 10, "bold"), state=tk.DISABLED)
 boton_cancelar.pack(side=tk.LEFT, padx=5)
 
-etiqueta_estado = tk.Label(ventana, text="", font=("Arial", 9, "bold"))
-etiqueta_estado.pack(pady=5)
+etiqueta_estado = tk.Label(tab_descargas, text="", font=("Arial", 9, "bold"))
+etiqueta_estado.pack(pady=2)
 
-barra_progreso = ttk.Progressbar(ventana, orient="horizontal", length=400, mode="determinate")
-barra_progreso.pack(pady=5)
+barra_progreso = ttk.Progressbar(tab_descargas, orient="horizontal", length=400, mode="determinate")
+barra_progreso.pack(pady=2)
 
-etiqueta_stats = tk.Label(ventana, text="", font=("Arial", 8), fg="gray")
+etiqueta_stats = tk.Label(tab_descargas, text="", font=("Arial", 8), fg="gray")
 etiqueta_stats.pack(pady=2)
+
+# --- Tab Historial ---
+columnas = ('titulo', 'calidad', 'fecha', 'ruta')
+arbol_historial = ttk.Treeview(tab_historial, columns=columnas, show='headings')
+arbol_historial.heading('titulo', text='Título')
+arbol_historial.heading('calidad', text='Calidad')
+arbol_historial.heading('fecha', text='Fecha')
+arbol_historial.heading('ruta', text='Ruta')
+
+arbol_historial.column('titulo', width=220)
+arbol_historial.column('calidad', width=100)
+arbol_historial.column('fecha', width=120)
+arbol_historial.column('ruta', width=0, stretch=tk.NO) # Oculta la columna de ruta
+
+# Scrollbar
+scrollbar = ttk.Scrollbar(tab_historial, orient=tk.VERTICAL, command=arbol_historial.yview)
+arbol_historial.configure(yscroll=scrollbar.set)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+arbol_historial.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+tk.Label(tab_historial, text="Doble clic en un elemento para abrir su ubicación.", font=("Arial", 8), fg="gray").pack(pady=2)
+
+def refrescar_historial_ui():
+    for item in arbol_historial.get_children():
+        arbol_historial.delete(item)
+    for item in cargar_historial():
+        arbol_historial.insert('', tk.END, values=(item['titulo'], item['calidad'], item['fecha'], item['ruta']))
+
+def abrir_ruta_historial(event):
+    seleccion = arbol_historial.selection()
+    if seleccion:
+        item = arbol_historial.item(seleccion[0])
+        ruta = item['values'][3]
+        if ruta and os.path.exists(ruta):
+            # Abrir explorador seleccionando el archivo (Windows)
+            subprocess.Popen(f'explorer /select,"{ruta}"')
+        elif ruta:
+            # Si el archivo fue borrado pero la carpeta existe
+            carpeta = os.path.dirname(ruta)
+            if os.path.exists(carpeta):
+                os.startfile(carpeta)
+            else:
+                messagebox.showinfo("Error", "El archivo y su carpeta ya no existen.")
+        
+arbol_historial.bind('<Double-1>', abrir_ruta_historial)
+refrescar_historial_ui()
 
 ventana.mainloop()
