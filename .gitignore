@@ -1,0 +1,9 @@
+# Archivos de la aplicación local
+dowv_auditoria.log
+historial.json
+config.json
+
+# Cache de Python
+__pycache__/
+*.py[cod]
+*$py.class
