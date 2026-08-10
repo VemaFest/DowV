@@ -140,6 +140,16 @@ def cancelar_descarga():
     etiqueta_estado.config(text="Cancelando... por favor espere.", fg="red")
     boton_cancelar.config(state=tk.DISABLED)
 
+def limpiar_temporales(directorio):
+    if not directorio or not os.path.exists(directorio):
+        return
+    for archivo in os.listdir(directorio):
+        if archivo.endswith('.part') or archivo.endswith('.ytdl'):
+            try:
+                os.remove(os.path.join(directorio, archivo))
+            except:
+                pass
+
 def progress_hook(d):
     global cancelar_descarga_flag
     if cancelar_descarga_flag:
@@ -148,6 +158,12 @@ def progress_hook(d):
     if d['status'] in ('downloading', 'finished'):
         if 'filename' in d:
             archivos_sesion.add(d['filename'])
+
+def postprocessor_hook(d):
+    if d['status'] == 'finished':
+        filepath = d.get('info_dict', {}).get('filepath')
+        if filepath:
+            archivos_sesion.add(filepath)
 
 def iniciar_descarga():
     # Usamos un hilo para que la ventana no diga "No responde" mientras descarga
@@ -170,11 +186,12 @@ def descargar():
     
     formato = opcion_var.get()
     
-    # Opciones base (guarda el archivo en la misma carpeta del programa)
+    # Opciones base
     ydl_opts = {
-        'outtmpl': '%(title)s.%(ext)s', 
         'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         'progress_hooks': [progress_hook],
+        'postprocessor_hooks': [postprocessor_hook],
+        'nooverwrites': True,
     }
 
     destino = carpeta_destino.get()
@@ -197,6 +214,7 @@ def descargar():
                     
         ydl_opts.update({
             'format': formato_yt,
+            'outtmpl': f'%(title)s_{calidad_mp3}kbps.%(ext)s',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
@@ -205,12 +223,15 @@ def descargar():
         })
     else:
         formato_yt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        res_str = "Mejor_Video"
         if "p" in calidad_seleccionada and calidad_seleccionada != "Mejor Video":
             res = calidad_seleccionada.replace("p", "")
+            res_str = f"{res}p"
             formato_yt = f'bestvideo[height<={res}][ext=mp4]+bestaudio[ext=m4a]/best[height<={res}][ext=mp4]/best'
             
         ydl_opts.update({
             'format': formato_yt,
+            'outtmpl': f'%(title)s_{res_str}.%(ext)s',
         })
 
     try:
@@ -234,6 +255,7 @@ def descargar():
             etiqueta_estado.config(text="Hubo un error al descargar.", fg="red")
             print(e)
     finally:
+        limpiar_temporales(destino)
         boton_descargar.config(state=tk.NORMAL)
         boton_cancelar.config(state=tk.DISABLED)
 
