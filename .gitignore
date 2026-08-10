@@ -12,3 +12,7 @@ __pycache__/
 dist/
 build/
 *.spec
+
+# Binarios locales
+bin/
+*.zip

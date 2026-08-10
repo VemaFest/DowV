@@ -10,6 +10,7 @@ from PIL import Image, ImageTk
 import subprocess
 from plyer import notification
 import logging
+import sys
 
 from core.logger import YTDLLogger
 from core.history import cargar_historial, agregar_a_historial, limpiar_todo_historial
@@ -307,6 +308,17 @@ class DowVideoApp(ctk.CTk):
         except Exception as e:
             print("Error procesando miniatura:", e)
 
+    def obtener_ruta_ffmpeg(self):
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+        ruta_bin = os.path.join(base_path, 'bin')
+        if os.path.exists(os.path.join(ruta_bin, 'ffmpeg.exe')):
+            return ruta_bin
+        return None
+
     def buscar_calidades_hilo(self):
         urls = self.obtener_urls()
         if not urls:
@@ -320,6 +332,10 @@ class DowVideoApp(ctk.CTk):
             'playlist_items': '1',
             'logger': YTDLLogger(),
         }
+        
+        ffmpeg_dir = self.obtener_ruta_ffmpeg()
+        if ffmpeg_dir:
+            ydl_opts['ffmpeg_location'] = ffmpeg_dir
             
         try:
             info = extraer_info_robusto(ydl_opts, url, download=False)
@@ -443,6 +459,9 @@ class DowVideoApp(ctk.CTk):
                 'extract_flat': True,
                 'logger': YTDLLogger(),
             }
+            ffmpeg_dir = self.obtener_ruta_ffmpeg()
+            if ffmpeg_dir:
+                ydl_opts_flat['ffmpeg_location'] = ffmpeg_dir
             videos_lista = []
             try:
                 info = extraer_info_robusto(ydl_opts_flat, urls[0], download=False)
@@ -535,8 +554,13 @@ class DowVideoApp(ctk.CTk):
             'postprocessor_hooks': [self.postprocessor_hook],
             'nooverwrites': True,
             'logger': YTDLLogger(),
+            'color': 'no_color',
         }
         
+        ffmpeg_dir = self.obtener_ruta_ffmpeg()
+        if ffmpeg_dir:
+            ydl_opts['ffmpeg_location'] = ffmpeg_dir
+
         logging.info("--- INICIO DE NUEVA SESIÓN DE DESCARGA ---")
         logging.info(f"URLs solicitadas: {urls}")
         
