@@ -95,8 +95,17 @@ class DowVideoApp(ctk.CTk):
         self.frame_descargas.grid_columnconfigure(1, weight=1)
         self.frame_descargas.grid_rowconfigure(2, weight=1)
         
-        # TITLE
-        ctk.CTkLabel(self.frame_descargas, text="Ingresa el Enlace de YouTube:", font=ctk.CTkFont(size=14, weight="bold"), text_color="#0d47a1").grid(row=0, column=0, columnspan=2, pady=(0, 5), sticky="w")
+        # TITLE AND URL BUTTONS
+        header_url_frame = ctk.CTkFrame(self.frame_descargas, fg_color="transparent")
+        header_url_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 5))
+        
+        ctk.CTkLabel(header_url_frame, text="Ingresa el Enlace de YouTube:", font=ctk.CTkFont(size=14, weight="bold"), text_color="#0d47a1").pack(side="left")
+        
+        btn_limpiar = ctk.CTkButton(header_url_frame, text="🗑️ Limpiar", width=80, height=28, fg_color="#e3f2fd", hover_color="#ff4d4d", text_color="#0d47a1", command=self.limpiar_caja_urls)
+        btn_limpiar.pack(side="right", padx=(5, 0))
+        
+        btn_pegar = ctk.CTkButton(header_url_frame, text="📋 Pegar", width=80, height=28, fg_color="#2196f3", hover_color="#0d47a1", text_color="#ffffff", command=self.pegar_enlace)
+        btn_pegar.pack(side="right")
         
         # URL BOX
         self.entrada_url = ctk.CTkTextbox(self.frame_descargas, height=60, fg_color="#ffffff", text_color="#0d47a1")
@@ -291,6 +300,24 @@ class DowVideoApp(ctk.CTk):
             self.after_cancel(self.id_after_busqueda)
         self.etiqueta_imagen.configure(image='', text="Buscando...", text_color="#0d47a1")
         self.id_after_busqueda = self.after(800, self.iniciar_busqueda)
+
+    def pegar_enlace(self):
+        try:
+            texto = self.clipboard_get()
+            if texto:
+                self.entrada_url.insert("end", texto + "\n")
+                self.on_url_change()
+        except tk.TclError:
+            pass
+
+    def limpiar_caja_urls(self):
+        contenido = self.entrada_url.get("1.0", "end-1c").strip()
+        if contenido:
+            if messagebox.askyesno("Limpiar", "¿Seguro que deseas borrar los enlaces ingresados?"):
+                self.entrada_url.delete("1.0", "end")
+                self.etiqueta_imagen.configure(image='', text="Sin miniatura", text_color="#90caf9")
+                self.combo_calidad.set("Busca un video primero")
+                self.etiqueta_estado.configure(text="")
 
     def iniciar_busqueda(self):
         t = threading.Thread(target=self.buscar_calidades_hilo)
